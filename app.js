@@ -30,11 +30,11 @@ if (process.env.REDIS_URL) {
     // MYSQL Setup (Default)
     const MySQLStore = require('express-mysql-session')(session);
     sessionStore = new MySQLStore({
-        host: process.env.DB_HOST,
-        port: process.env.DB_PORT,
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-        database: process.env.DB_NAME,
+        host: process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
+        port: process.env.DB_PORT || process.env.MYSQLPORT || 3306,
+        user: process.env.DB_USER || process.env.MYSQLUSER || 'root',
+        password: process.env.DB_PASSWORD || process.env.MYSQL_ROOT_PASSWORD || process.env.MYSQLPASSWORD || '',
+        database: process.env.DB_NAME || process.env.MYSQL_DATABASE || 'railway',
         clearExpired: true,
         checkExpirationInterval: 900000,
         expiration: 86400000
