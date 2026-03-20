@@ -1,0 +1,728 @@
+�
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Registro de jugador en la escuela de fútbol">
+  <title>Registro de Jugador | futGistro</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#10b981">
+  <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+</head>
+
+<body>
+  <div class="app-layout" id="appLayout"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    let isEditing = false;
+    let jugadorId = null;
+    let signaturePad = null;
+    let signaturePadEntrenador = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // Check if editing
+      const pathParts = window.location.pathname.split('/');
+      if (pathParts.includes('editar') && pathParts.length > 3) {
+        isEditing = true;
+        jugadorId = pathParts[pathParts.length - 1];
+      }
+      buildPage();
+    });
+
+    async function buildPage() {
+      const user = await loadUserInfo();
+      const layout = document.getElementById('appLayout');
+      layout.innerHTML = `
+        ${renderSidebar(user.nombre, user.rol)}
+        <main class="main-content">
+          <div class="top-bar">
+            <div>
+              <button class="menu-toggle" id="menuToggle"><i class="bi bi-list"></i></button>
+            </div>
+            <div>
+              <h4>${isEditing ? 'Editar Jugador' : 'Nuevo Jugador'}</h4>
+              <div class="breadcrumb">
+                <a href="/jugadores/page" style="color:var(--text-muted);text-decoration:none">Jugadores</a> / ${isEditing ? 'Editar' : 'Nuevo'}
+              </div>
+            </div>
+            <div>
+              <a href="/jugadores/page" class="btn-secondary-custom" id="btn-back">
+                <i class="bi bi-arrow-left"></i> Volver
+              </a>
+            </div>
+          </div>
+          <div class="content-area">
+            <form id="jugadorForm" enctype="multipart/form-data">
+              <!-- Personal Data -->
+              <div class="data-card mb-4 fade-in" id="section1">
+                <div class="data-card-header">
+                  <h5><i class="bi bi-person-fill me-2" style="color:var(--primary)"></i> Datos Personales</h5>
+                </div>
+                <div class="data-card-body">
+                  <div class="row g-3">
+                    <div class="col-md-6">
+                      <label for="nombre" class="form-label-custom">Nombre completo *</label>
+                      <input type="text" id="nombre" name="nombre" class="form-control-custom" placeholder="Nombre completo del jugador" required>
+                    </div>
+                    <div class="col-md-3">
+                      <label for="fecha_nacimiento" class="form-label-custom">Fecha de nacimiento *</label>
+                      <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" class="form-control-custom" required onchange="calcularEdadField()">
+                    </div>
+                    <div class="col-md-3">
+                      <label for="lugar_nacimiento" class="form-label-custom">Lugar de nacimiento</label>
+                      <input type="text" id="lugar_nacimiento" name="lugar_nacimiento" class="form-control-custom" placeholder="Ciudad, Depto">
+                    </div>
+                    
+                    <div class="col-md-3">
+                      <label class="form-label-custom">Edad</label>
+                      <input type="text" id="edad_display" class="form-control-custom" readonly placeholder="Se calcula automáticamente" style="background:var(--bg-secondary)">
+                    </div>
+                    <div class="col-md-3">
+                      <label for="documento" class="form-label-custom">Documento / Registro civil *</label>
+                      <input type="text" id="documento" name="documento" class="form-control-custom" placeholder="N° de documento" required oninput="let v=this.value.replace(/[^0-9]/g, ''); if(this.value!==v)this.value=v;">
+                    </div>
+                    <div class="col-md-3">
+                      <label for="tipo_sangre" class="form-label-custom">Tipo de sangre y RH</label>
+                      <input type="text" id="tipo_sangre" name="tipo_sangre" class="form-control-custom" placeholder="Ej: O+" oninput="let v=this.value.replace(/[^a-zA-Z0-9\+\-]/g, ''); if(this.value!==v)this.value=v;">
+                    </div>
+                    <div class="col-md-3">
+                      <label for="eps" class="form-label-custom">EPS</label>
+                      <input type="text" id="eps" name="eps" class="form-control-custom" placeholder="Nombre de EPS">
+                    </div>
+
+                    <div class="col-md-3">
+                      <label for="estatura" class="form-label-custom">Estatura</label>
+                      <input type="text" id="estatura" name="estatura" class="form-control-custom" placeholder="Ej: 1.50m">
+                    </div>
+                    <div class="col-md-3">
+                      <label for="peso" class="form-label-custom">Peso</label>
+                      <input type="text" id="peso" name="peso" class="form-control-custom" placeholder="Ej: 45kg">
+                    </div>
+                    <div class="col-md-6">
+                      <label for="ciudad" class="form-label-custom">Ciudad, Municipio o Vereda</label>
+                      <input type="text" id="ciudad" name="ciudad" class="form-control-custom" placeholder="Lugar de residencia">
+                    </div>
+
+                    <div class="col-md-4">
+                      <label for="direccion" class="form-label-custom">Dirección de Domicilio</label>
+                      <input type="text" id="direccion" name="direccion" class="form-control-custom" placeholder="Dirección del jugador">
+                    </div>
+                    <div class="col-md-4">
+                      <label for="numero_fijo" class="form-label-custom">Celular 1</label>
+                      <input type="tel" id="numero_fijo" name="numero_fijo" class="form-control-custom" placeholder="Celular" oninput="let v=this.value.replace(/[^0-9]/g, ''); if(this.value!==v)this.value=v;">
+                    </div>
+                    <div class="col-md-4">
+                      <label for="telefono" class="form-label-custom">Número Celular</label>
+                      <input type="tel" id="telefono" name="telefono" class="form-control-custom" placeholder="Celular del jugador" oninput="let v=this.value.replace(/[^0-9]/g, ''); if(this.value!==v)this.value=v;">
+                    </div>
+                  </div>
+                  <button type="button" class="btn-primary-custom w-100 mt-4" id="btn-next-1" onclick="nextStep(1)" style="display:none;">Continuar a Datos del Padre <i class="bi bi-arrow-down-circle ms-1"></i></button>
+                </div>
+              </div>
+
+              <!-- Parent/Guardian Data -->
+              <div class="data-card mb-4 fade-in" id="section2" style="animation-delay: 0.1s; display:none;">
+                <div class="data-card-header">
+                  <h5><i class="bi bi-people-fill me-2" style="color:var(--secondary)"></i> Datos del Padre / Acudiente</h5>
+                </div>
+                <div class="data-card-body">
+                  <div class="row g-3">
+                    <div class="col-md-6">
+                      <label for="nombre_padre" class="form-label-custom">Nombre del padre / acudiente</label>
+                      <input type="text" id="nombre_padre" name="nombre_padre" class="form-control-custom" placeholder="Nombre completo del padre o tutor">
+                    </div>
+                    <div class="col-md-6">
+                      <label for="cc_padre" class="form-label-custom">Número de CC (Padre)</label>
+                      <input type="text" id="cc_padre" name="cc_padre" class="form-control-custom" placeholder="Cédula del padre" oninput="let v=this.value.replace(/[^0-9]/g, ''); if(this.value!==v)this.value=v;">
+                    </div>
+                    <div class="col-md-6">
+                      <label for="nombre_madre" class="form-label-custom">Nombre de la madre</label>
+                      <input type="text" id="nombre_madre" name="nombre_madre" class="form-control-custom" placeholder="Nombre completo de la madre (opcional)">
+                    </div>
+                    <div class="col-md-6">
+                      <label for="cc_madre" class="form-label-custom">Número de CC (Madre)</label>
+                      <input type="text" id="cc_madre" name="cc_madre" class="form-control-custom" placeholder="Cédula de la madre" oninput="let v=this.value.replace(/[^0-9]/g, ''); if(this.value!==v)this.value=v;">
+                    </div>
+                    <div class="col-md-12">
+                      <label for="telefono_padre" class="form-label-custom">Teléfono del Acudiente / Emergencia</label>
+                      <input type="tel" id="telefono_padre" name="telefono_padre" class="form-control-custom" placeholder="Teléfono de contacto" oninput="let v=this.value.replace(/[^0-9]/g, ''); if(this.value!==v)this.value=v;">
+                    </div>
+                  </div>
+                  <button type="button" class="btn-primary-custom w-100 mt-4" id="btn-next-2" onclick="nextStep(2)">Continuar a Datos de Inscripción <i class="bi bi-arrow-down-circle ms-1"></i></button>
+                </div>
+              </div>
+
+              <!-- School Data -->
+              <div class="data-card mb-4 fade-in" id="section3" style="animation-delay: 0.15s; display:none;">
+                <div class="data-card-header">
+                  <h5><i class="bi bi-trophy-fill me-2" style="color:var(--accent)"></i> Datos de Inscripción</h5>
+                </div>
+                <div class="data-card-body">
+                  <div class="row g-3">
+                    <div class="col-md-4">
+                      <label for="categoria_id" class="form-label-custom">Categoría</label>
+                      <select id="categoria_id" name="categoria_id" class="form-select-custom">
+                        <option value="">Seleccionar categoría...</option>
+                      </select>
+                    </div>
+                    <div class="col-md-4" id="escuelaField">
+                      <label for="escuela_id" class="form-label-custom">Escuela / Sede</label>
+                      <input type="text" id="escuela_display" class="form-control-custom" readonly style="background:var(--bg-secondary)">
+                      <input type="hidden" id="escuela_id" name="escuela_id">
+                    </div>
+                    <div class="col-md-4">
+                      <label for="fecha_registro" class="form-label-custom">Fecha de inscripción</label>
+                      <input type="date" id="fecha_registro" name="fecha_registro" class="form-control-custom">
+                    </div>
+                  </div>
+                  <button type="button" class="btn-primary-custom w-100 mt-4" id="btn-next-3" onclick="nextStep(3)">Continuar a Documentos y Fotos <i class="bi bi-arrow-down-circle ms-1"></i></button>
+                </div>
+              </div>
+
+              <!-- Documents / Photos (progressive, max 7) -->
+              <div class="data-card mb-4 fade-in" id="section4" style="animation-delay: 0.2s; display:none;">
+                <div class="data-card-header">
+                  <h5><i class="bi bi-file-earmark-image-fill me-2" style="color:var(--info)"></i> Documentos y Fotos</h5>
+                  <span class="badge-custom gray" style="font-size:11px" id="fileCountBadge"><i class="bi bi-info-circle me-1"></i>0 / 7 archivos</span>
+                </div>
+                <div class="data-card-body">
+                  <div class="row g-4" id="uploadsContainer">
+                    <!-- Slot 1: Foto -->
+                    <div class="col-md-4 upload-slot" id="uploadSlot1">
+                      <label class="form-label-custom">1. Foto del jugador</label>
+                      <div class="file-upload-area" onclick="document.getElementById('foto').click()">
+                        <i class="bi bi-camera-fill d-block"></i>
+                        <p>Clic para subir foto</p>
+                        <div id="fotoPreview"></div>
+                      </div>
+                      <input type="file" id="foto" name="foto" accept="image/*,.pdf" style="display:none" onchange="onFileSlotChange(1)">
+                    </div>
+                    <!-- Slot 2: Tarjeta Identidad (Frente) -->
+                    <div class="col-md-4 upload-slot" id="uploadSlot2" style="display:none">
+                      <label class="form-label-custom">2. Tarjeta Identidad (Frente)</label>
+                      <div class="file-upload-area" onclick="document.getElementById('documento_extra2').click()">
+                        <i class="bi bi-file-earmark-person-fill d-block"></i>
+                        <p>Clic para subir documento</p>
+                        <div id="docExtra2Preview"></div>
+                      </div>
+                      <input type="file" id="documento_extra2" name="documento_extra2" accept="image/*,.pdf" style="display:none" onchange="onFileSlotChange(2)">
+                    </div>
+                    <!-- Slot 3: Tarjeta Identidad (Reverso) -->
+                    <div class="col-md-4 upload-slot" id="uploadSlot3" style="display:none">
+                      <label class="form-label-custom">3. Tarjeta Identidad (Reverso)</label>
+                      <div class="file-upload-area" onclick="document.getElementById('documento_extra4').click()">
+                        <i class="bi bi-file-earmark-person-fill d-block"></i>
+                        <p>Clic para subir documento</p>
+                        <div id="docExtra4Preview"></div>
+                      </div>
+                      <input type="file" id="documento_extra4" name="documento_extra4" accept="image/*,.pdf" style="display:none" onchange="onFileSlotChange(3)">
+                    </div>
+                    <!-- Slot 4: Registro civil -->
+                    <div class="col-md-4 upload-slot" id="uploadSlot4" style="display:none">
+                      <label class="form-label-custom">4. Registro civil</label>
+                      <div class="file-upload-area" onclick="document.getElementById('registro_civil').click()">
+                        <i class="bi bi-file-earmark-text-fill d-block"></i>
+                        <p>Clic para subir documento</p>
+                        <div id="registroCivilPreview"></div>
+                      </div>
+                      <input type="file" id="registro_civil" name="registro_civil" accept="image/*,.pdf" style="display:none" onchange="onFileSlotChange(4)">
+                    </div>
+                    <!-- Slot 5: Documento del padre o madre -->
+                    <div class="col-md-4 upload-slot" id="uploadSlot5" style="display:none">
+                      <label class="form-label-custom">5. Documento del padre o madre</label>
+                      <div class="file-upload-area" onclick="document.getElementById('documento_acudiente').click()">
+                        <i class="bi bi-file-earmark-person-fill d-block"></i>
+                        <p>Clic para subir documento</p>
+                        <div id="docAcudientePreview"></div>
+                      </div>
+                      <input type="file" id="documento_acudiente" name="documento_acudiente" accept="image/*,.pdf" style="display:none" onchange="onFileSlotChange(5)">
+                    </div>
+                    <!-- Slot 6: Certificado de EPS -->
+                    <div class="col-md-4 upload-slot" id="uploadSlot6" style="display:none">
+                      <label class="form-label-custom">6. Certificado de EPS</label>
+                      <div class="file-upload-area" onclick="document.getElementById('documento_extra1').click()">
+                        <i class="bi bi-file-earmark-plus-fill d-block"></i>
+                        <p>Clic para subir documento</p>
+                        <div id="docExtra1Preview"></div>
+                      </div>
+                      <input type="file" id="documento_extra1" name="documento_extra1" accept="image/*,.pdf" style="display:none" onchange="onFileSlotChange(6)">
+                    </div>
+                    <!-- Slot 7: Certificado de estudio -->
+                    <div class="col-md-4 upload-slot" id="uploadSlot7" style="display:none">
+                      <label class="form-label-custom">7. Certificado de estudio</label>
+                      <div class="file-upload-area" onclick="document.getElementById('documento_extra3').click()">
+                        <i class="bi bi-file-earmark-plus-fill d-block"></i>
+                        <p>Clic para subir documento</p>
+                        <div id="docExtra3Preview"></div>
+                      </div>
+                      <input type="file" id="documento_extra3" name="documento_extra3" accept="image/*,.pdf" style="display:none" onchange="onFileSlotChange(7)">
+                    </div>
+                  </div>
+                  <button type="button" class="btn-primary-custom w-100 mt-4" id="btn-next-4" onclick="nextStep(4)">Continuar a Firma Digital <i class="bi bi-arrow-down-circle ms-1"></i></button>
+                </div>
+              </div>
+
+              <!-- Digital Signatures -->
+              <div class="data-card mb-4 fade-in" id="section5" style="animation-delay: 0.25s; display:none;">
+                <div class="data-card-header">
+                  <h5><i class="bi bi-pen-fill me-2" style="color:var(--primary)"></i> Firmas de Autorización</h5>
+                </div>
+                <div class="data-card-body">
+                  <div class="row g-4">
+                    <div class="col-md-6">
+                      <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label-custom mb-0">Firma del Padre o Acudiente</label>
+                        <button type="button" class="btn-icon" onclick="clearSignature()" title="Limpiar firma">
+                          <i class="bi bi-eraser"></i>
+                        </button>
+                      </div>
+                      <div class="signature-container" id="signatureContainer">
+                        <canvas id="signatureCanvas"></canvas>
+                      </div>
+                      <div id="existingSignature" style="display:none;margin-top:12px">
+                        <p style="font-size:12px;color:var(--text-muted)">Firma actual:</p>
+                        <img id="existingSignatureImg" style="max-width:200px;border:1px solid var(--border-color);border-radius:var(--radius-sm)">
+                      </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                      <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label-custom mb-0">Firma del Entrenador</label>
+                        <button type="button" class="btn-icon" onclick="clearSignatureEntrenador()" title="Limpiar firma">
+                          <i class="bi bi-eraser"></i>
+                        </button>
+                      </div>
+                      <div class="signature-container" id="signatureContainerEntrenador">
+                        <canvas id="signatureCanvasEntrenador"></canvas>
+                      </div>
+                      <div id="existingSignatureEntrenador" style="display:none;margin-top:12px">
+                        <p style="font-size:12px;color:var(--text-muted)">Firma actual:</p>
+                        <img id="existingSignatureImgEntrenador" style="max-width:200px;border:1px solid var(--border-color);border-radius:var(--radius-sm)">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Submit -->
+              <div class="d-flex gap-3 justify-content-end mb-4 fade-in" id="section-submit" style="display:none;">
+                <a href="/jugadores/page" class="btn-secondary-custom" id="btn-cancel">
+                  <i class="bi bi-x-circle"></i> Cancelar
+                </a>
+                <button type="submit" class="btn-primary-custom" id="btn-submit">
+                  <i class="bi bi-check-circle"></i> ${isEditing ? 'Actualizar Jugador' : 'Registrar Jugador'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </main>
+      `;
+
+      initSidebar();
+      document.getElementById('nav-jugadores')?.classList.add('active');
+
+      // Setup progressive file uploads (max 7)
+      setupFileUpload('foto', 'fotoPreview');
+      setupFileUpload('registro_civil', 'registroCivilPreview');
+      setupFileUpload('documento_acudiente', 'docAcudientePreview');
+      setupFileUpload('documento_extra1', 'docExtra1Preview');
+      setupFileUpload('documento_extra2', 'docExtra2Preview');
+      setupFileUpload('documento_extra3', 'docExtra3Preview');
+      setupFileUpload('documento_extra4', 'docExtra4Preview');
+      updateFileCount();
+
+      // Setup progressive disclosure or show all
+      if (isEditing) {
+        showAllSections();
+      } else {
+        document.getElementById('btn-next-1').style.display = 'block';
+      }
+
+      // Load categories and schools
+      await loadCategorias();
+      await loadEscuelas();
+
+      // Setup signature pad
+      setupSignaturePad();
+
+      // Set default date
+      if (!isEditing) {
+        document.getElementById('fecha_registro').value = getTodayStr();
+      }
+
+      // Load player data if editing
+      if (isEditing) {
+        await loadJugador();
+      }
+
+      // Form submit
+      document.getElementById('jugadorForm').addEventListener('submit', handleSubmit);
+    }
+
+    async function loadCategorias() {
+      try {
+        const data = await fetchAPI('/categorias');
+        if (data && data.success) {
+          const select = document.getElementById('categoria_id');
+          data.data.forEach(cat => {
+            const opt = document.createElement('option');
+            opt.value = cat.id;
+            opt.textContent = `${cat.nombre} (${cat.edad_min}-${cat.edad_max} años)`;
+            select.appendChild(opt);
+          });
+        }
+      } catch (e) { console.error(e); }
+    }
+
+    async function loadEscuelas() {
+      const user = getUserInfo();
+      if (user.rol === 'superadmin') {
+        // Superadmin can pick any school - replace with dropdown
+        const field = document.getElementById('escuelaField');
+        field.innerHTML = `
+          <label for="escuela_id" class="form-label-custom">Escuela / Sede</label>
+          <select id="escuela_id" name="escuela_id" class="form-select-custom">
+            <option value="">Seleccionar escuela...</option>
+          </select>
+        `;
+        try {
+          const data = await fetchAPI('/escuelas/');
+          if (data && data.success) {
+            const select = document.getElementById('escuela_id');
+            data.data.forEach(esc => {
+              if (esc.activa !== false) {
+                const opt = document.createElement('option');
+                opt.value = esc.id;
+                opt.textContent = esc.nombre;
+                select.appendChild(opt);
+              }
+            });
+          }
+        } catch (e) { console.error(e); }
+      } else {
+        // Non-superadmin: auto-fill with their school (read-only)
+        document.getElementById('escuela_display').value = user.escuela_nombre || 'Sin escuela';
+        document.getElementById('escuela_id').value = user.escuela_id || '';
+      }
+    }
+
+    async function loadJugador() {
+      try {
+        showLoading();
+        const data = await fetchAPI(`/jugadores/api/${jugadorId}`);
+        hideLoading();
+
+        if (data && data.success) {
+          const j = data.data;
+          document.getElementById('nombre').value = j.nombre || '';
+          document.getElementById('fecha_nacimiento').value = j.fecha_nacimiento || '';
+          document.getElementById('documento').value = j.documento || '';
+          document.getElementById('direccion').value = j.direccion || '';
+          document.getElementById('telefono').value = j.telefono || '';
+          document.getElementById('nombre_padre').value = j.nombre_padre || '';
+          document.getElementById('telefono_padre').value = j.telefono_padre || '';
+
+          document.getElementById('lugar_nacimiento').value = j.lugar_nacimiento || '';
+          document.getElementById('estatura').value = j.estatura || '';
+          document.getElementById('peso').value = j.peso || '';
+          document.getElementById('tipo_sangre').value = j.tipo_sangre || '';
+          document.getElementById('eps').value = j.eps || '';
+          document.getElementById('cc_padre').value = j.cc_padre || '';
+          document.getElementById('nombre_madre').value = j.nombre_madre || '';
+          document.getElementById('cc_madre').value = j.cc_madre || '';
+          document.getElementById('ciudad').value = j.ciudad || '';
+          document.getElementById('numero_fijo').value = j.numero_fijo || '';
+
+          document.getElementById('categoria_id').value = j.categoria_id || '';
+          document.getElementById('escuela_id').value = j.escuela_id || '';
+          document.getElementById('fecha_registro').value = j.fecha_registro || '';
+
+          calcularEdadField();
+
+          // Show existing documents and reveal their slots
+          const existingFiles = [
+            { key: 'foto', preview: 'fotoPreview', slot: 1 },
+            { key: 'documento_extra2', preview: 'docExtra2Preview', slot: 2 },
+            { key: 'documento_extra4', preview: 'docExtra4Preview', slot: 3 },
+            { key: 'registro_civil', preview: 'registroCivilPreview', slot: 4 },
+            { key: 'documento_acudiente', preview: 'docAcudientePreview', slot: 5 },
+            { key: 'documento_extra1', preview: 'docExtra1Preview', slot: 6 },
+            { key: 'documento_extra3', preview: 'docExtra3Preview', slot: 7 }
+          ];
+          let lastFilledSlot = 0;
+          existingFiles.forEach(f => {
+            if (j[f.key]) {
+              showSlot(f.slot);
+              document.getElementById(f.preview).innerHTML = `<img src="${j[f.key]}" class="preview-img" alt="${f.key}">`;
+              lastFilledSlot = f.slot;
+            }
+          });
+          // Show the next empty slot after the last filled one
+          if (lastFilledSlot > 0 && lastFilledSlot < 7) {
+            showSlot(lastFilledSlot + 1);
+          }
+          updateFileCount();
+          if (j.firma_padre) {
+            document.getElementById('existingSignature').style.display = 'block';
+            document.getElementById('existingSignatureImg').src = j.firma_padre;
+          }
+          if (j.firma_entrenador) {
+            document.getElementById('existingSignatureEntrenador').style.display = 'block';
+            document.getElementById('existingSignatureImgEntrenador').src = j.firma_entrenador;
+          }
+        }
+      } catch (e) {
+        hideLoading();
+        showToast('Error al cargar datos del jugador', 'error');
+      }
+    }
+
+    function setupSignaturePad() {
+      const canvas1 = document.getElementById('signatureCanvas');
+      const container1 = document.getElementById('signatureContainer');
+      const canvas2 = document.getElementById('signatureCanvasEntrenador');
+      const container2 = document.getElementById('signatureContainerEntrenador');
+
+      let prevWindowWidth = window.innerWidth;
+
+      function resizeCanvases() {
+        if (signaturePad && window.innerWidth === prevWindowWidth) return;
+        prevWindowWidth = window.innerWidth;
+
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+
+        const data1 = signaturePad && !signaturePad.isEmpty() ? signaturePad.toData() : null;
+        const data2 = signaturePadEntrenador && !signaturePadEntrenador.isEmpty() ? signaturePadEntrenador.toData() : null;
+
+        // Pad 1 setup
+        if (container1 && canvas1) {
+          const dw1 = container1.offsetWidth ? container1.offsetWidth - 16 : canvas1.offsetWidth;
+          canvas1.width = dw1 * ratio;
+          canvas1.height = 200 * ratio;
+          canvas1.style.width = dw1 + "px";
+          canvas1.style.height = 200 + "px";
+          canvas1.getContext('2d').scale(ratio, ratio);
+          if (signaturePad) {
+            signaturePad.clear();
+            if (data1) signaturePad.fromData(data1);
+          }
+        }
+
+        // Pad 2 setup
+        if (container2 && canvas2) {
+          const dw2 = container2.offsetWidth ? container2.offsetWidth - 16 : canvas2.offsetWidth;
+          canvas2.width = dw2 * ratio;
+          canvas2.height = 200 * ratio;
+          canvas2.style.width = dw2 + "px";
+          canvas2.style.height = 200 + "px";
+          canvas2.getContext('2d').scale(ratio, ratio);
+          if (signaturePadEntrenador) {
+            signaturePadEntrenador.clear();
+            if (data2) signaturePadEntrenador.fromData(data2);
+          }
+        }
+      }
+
+      // Initialize both
+      if (canvas1 && !signaturePad) {
+        signaturePad = new SignaturePad(canvas1, { backgroundColor: 'rgb(255, 255, 255)', penColor: 'rgb(0, 0, 0)', minWidth: 1, maxWidth: 2.5 });
+      }
+      if (canvas2 && !signaturePadEntrenador) {
+        signaturePadEntrenador = new SignaturePad(canvas2, { backgroundColor: 'rgb(255, 255, 255)', penColor: 'rgb(0, 0, 0)', minWidth: 1, maxWidth: 2.5 });
+      }
+
+      window.addEventListener('resize', resizeCanvases);
+      setTimeout(resizeCanvases, 100);
+    }
+
+    function clearSignature() {
+      if (signaturePad) signaturePad.clear();
+    }
+
+    function clearSignatureEntrenador() {
+      if (signaturePadEntrenador) signaturePadEntrenador.clear();
+    }
+
+    function calcularEdadField() {
+      const fecha = document.getElementById('fecha_nacimiento').value;
+      const display = document.getElementById('edad_display');
+      if (fecha) {
+        const edad = calcularEdad(fecha);
+        display.value = `${edad} años`;
+      } else {
+        display.value = '';
+      }
+    }
+
+    async function handleSubmit(e) {
+      e.preventDefault();
+
+      const btn = document.getElementById('btn-submit');
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner" style="width:20px;height:20px;border-width:2px"></div> Guardando...';
+
+      try {
+        const formData = new FormData();
+
+        // Text fields
+        const fields = [
+          'nombre', 'fecha_nacimiento', 'lugar_nacimiento', 'estatura', 'peso', 'tipo_sangre', 'eps',
+          'documento', 'ciudad', 'direccion', 'numero_fijo', 'telefono', 'nombre_padre', 'cc_padre',
+          'nombre_madre', 'cc_madre', 'telefono_padre', 'categoria_id', 'escuela_id', 'fecha_registro'
+        ];
+
+        fields.forEach(field => {
+          const val = document.getElementById(field)?.value;
+          if (val) formData.append(field, val);
+        });
+
+        // File fields (max 7)
+        const fotoFile = document.getElementById('foto').files[0];
+        const rcFile = document.getElementById('registro_civil').files[0];
+        const docFile = document.getElementById('documento_acudiente').files[0];
+        const extra1File = document.getElementById('documento_extra1').files[0];
+        const extra2File = document.getElementById('documento_extra2').files[0];
+        const extra3File = document.getElementById('documento_extra3').files[0];
+        const extra4File = document.getElementById('documento_extra4').files[0];
+
+        if (fotoFile) formData.append('foto', fotoFile);
+        if (rcFile) formData.append('registro_civil', rcFile);
+        if (docFile) formData.append('documento_acudiente', docFile);
+        if (extra1File) formData.append('documento_extra1', extra1File);
+        if (extra2File) formData.append('documento_extra2', extra2File);
+        if (extra3File) formData.append('documento_extra3', extra3File);
+        if (extra4File) formData.append('documento_extra4', extra4File);
+
+        // Signature
+        if (signaturePad && !signaturePad.isEmpty()) {
+          formData.append('firma_base64', signaturePad.toDataURL('image/png'));
+        }
+        if (signaturePadEntrenador && !signaturePadEntrenador.isEmpty()) {
+          formData.append('firma_entrenador_base64', signaturePadEntrenador.toDataURL('image/png'));
+        }
+
+        const url = isEditing ? `/jugadores/api/${jugadorId}` : '/jugadores/api';
+        const method = isEditing ? 'PUT' : 'POST';
+
+        const response = await fetch(url, { method, body: formData });
+        const data = await response.json();
+
+        if (!response.ok) throw new Error(data.message || 'Error al guardar');
+
+        showToast(data.message || 'Jugador guardado exitosamente');
+        setTimeout(() => {
+          window.location.href = '/jugadores/page';
+        }, 1500);
+      } catch (error) {
+        showToast(error.message || 'Error al guardar', 'error');
+        btn.disabled = false;
+        btn.innerHTML = `<i class="bi bi-check-circle"></i> ${isEditing ? 'Actualizar Jugador' : 'Registrar Jugador'}`;
+      }
+    }
+
+    // ============ PROGRESSIVE FILE UPLOAD ============
+    function showSlot(slotNum) {
+      const slot = document.getElementById('uploadSlot' + slotNum);
+      if (slot && slot.style.display === 'none') {
+        slot.style.display = '';
+        slot.style.opacity = '0';
+        slot.style.transform = 'translateY(10px)';
+        requestAnimationFrame(() => {
+          slot.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+          slot.style.opacity = '1';
+          slot.style.transform = 'translateY(0)';
+        });
+      }
+    }
+
+    function onFileSlotChange(currentSlot) {
+      const nextSlot = currentSlot + 1;
+      if (nextSlot <= 7) {
+        showSlot(nextSlot);
+      }
+      updateFileCount();
+    }
+
+    function updateFileCount() {
+      const fileInputIds = ['foto', 'documento_extra2', 'documento_extra4', 'registro_civil', 'documento_acudiente', 'documento_extra1', 'documento_extra3'];
+      const previewIds = ['fotoPreview', 'docExtra2Preview', 'docExtra4Preview', 'registroCivilPreview', 'docAcudientePreview', 'docExtra1Preview', 'docExtra3Preview'];
+      let count = 0;
+      fileInputIds.forEach((id, i) => {
+        const input = document.getElementById(id);
+        const preview = document.getElementById(previewIds[i]);
+        // Count if file input has new file OR preview has existing image
+        if ((input && input.files && input.files.length > 0) || (preview && preview.innerHTML.includes('<img'))) {
+          count++;
+        }
+      });
+      const badge = document.getElementById('fileCountBadge');
+      if (badge) {
+        badge.innerHTML = `<i class="bi bi-info-circle me-1"></i>${count} / 7 archivos`;
+        badge.className = count >= 7 ? 'badge-custom green' : 'badge-custom gray';
+        badge.style.fontSize = '11px';
+      }
+    }
+
+    // ============ PROGRESSIVE DISCLOSURE WIZARD ============
+    function nextStep(step) {
+      // 1. Validate current step naturally
+      const currentSection = document.getElementById('section' + step);
+      if (currentSection) {
+        const inputs = currentSection.querySelectorAll('[required]');
+        let valid = true;
+        for (let input of inputs) {
+          if (!input.checkValidity()) {
+            input.reportValidity();
+            valid = false;
+            break;
+          }
+        }
+        if (!valid) return;
+      }
+
+      // 2. Hide "Next" button of this step
+      const nextBtn = document.getElementById('btn-next-' + step);
+      if (nextBtn) nextBtn.style.display = 'none';
+
+      // 3. Show next step
+      const nextStepNum = step + 1;
+      const nextSection = document.getElementById('section' + nextStepNum);
+      if (nextSection) {
+        nextSection.style.display = 'block';
+        nextSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+
+      // 4. If step 4 (Documentos), also show section 5 (Firma) and submit buttons
+      if (step === 4) {
+        document.getElementById('section5').style.display = 'block';
+        document.getElementById('section-submit').style.display = 'flex';
+        // Redraw signature pad logic to prevent blank canvas issue when hidden initially
+        setupSignaturePad();
+      }
+    }
+
+    function showAllSections() {
+      for (let i = 2; i <= 5; i++) {
+        const sec = document.getElementById('section' + i);
+        if (sec) sec.style.display = 'block';
+        const btn = document.getElementById('btn-next-' + i);
+        if (btn) btn.style.display = 'none';
+      }
+      const btn1 = document.getElementById('btn-next-1');
+      if (btn1) btn1.style.display = 'none';
+      const submit = document.getElementById('section-submit');
+      if (submit) submit.style.display = 'flex';
+      setupSignaturePad();
+    }
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Control de pagos mensuales de jugadores">
+  <title>Pagos | futGistro</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    .pagos-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .pago-stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      transition: all var(--transition);
+    }
+
+    .pago-stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .pago-stat-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+    }
+
+    .pago-stat-card.total-card::after { background: linear-gradient(90deg, var(--secondary), var(--info)); }
+    .pago-stat-card.pagado-card::after { background: linear-gradient(90deg, var(--primary), var(--primary-light)); }
+    .pago-stat-card.pendiente-card::after { background: linear-gradient(90deg, var(--accent), #f97316); }
+    .pago-stat-card.monto-card::after { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+
+    .pago-stat-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      margin-bottom: 12px;
+    }
+
+    .pago-stat-icon.blue { background: rgba(14, 165, 233, 0.15); color: var(--secondary); }
+    .pago-stat-icon.green { background: rgba(16, 185, 129, 0.15); color: var(--primary-light); }
+    .pago-stat-icon.amber { background: rgba(245, 158, 11, 0.15); color: var(--accent); }
+    .pago-stat-icon.purple { background: rgba(139, 92, 246, 0.15); color: #a78bfa; }
+
+    .pago-stat-value {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .pago-stat-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* Estado badges */
+    .estado-badge {
+      padding: 5px 14px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all var(--transition);
+      border: none;
+    }
+
+    .estado-badge.pagado {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--primary-light);
+    }
+
+    .estado-badge.pendiente {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--accent);
+    }
+
+    .estado-badge:hover {
+      transform: scale(1.05);
+    }
+
+    /* Quick toggle button */
+    .btn-toggle-pago {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-color);
+      background: transparent;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition-fast);
+      font-size: 16px;
+    }
+
+    .btn-toggle-pago.marcar-pagado {
+      color: var(--primary-light);
+    }
+
+    .btn-toggle-pago.marcar-pagado:hover {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-toggle-pago.marcar-pendiente {
+      color: var(--accent);
+    }
+
+    .btn-toggle-pago.marcar-pendiente:hover {
+      background: rgba(245, 158, 11, 0.15);
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+
+    /* Generar pagos card */
+    .generar-card {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(14, 165, 233, 0.08));
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    /* Checkbox custom */
+    .pago-checkbox {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    /* Acciones masivas bar */
+    .acciones-masivas {
+      background: var(--bg-card);
+      border: 1px solid var(--primary);
+      border-radius: var(--radius-md);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+      animation: slideInRight 0.3s ease;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);
+    }
+
+    .acciones-masivas .count {
+      font-weight: 700;
+      color: var(--primary-light);
+      font-size: 14px;
+    }
+
+    /* Month selector pills */
+    .month-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .month-pill {
+      padding: 6px 14px;
+      border-radius: var(--radius-full);
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid var(--border-color);
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .month-pill:hover {
+      background: rgba(148, 163, 184, 0.1);
+      color: var(--text-primary);
+    }
+
+    .month-pill.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    /* Modal custom styles */
+    .pago-modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(4px);
+      z-index: 5000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .pago-modal {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      width: 95%;
+      max-width: 520px;
+      max-height: 90vh;
+      overflow-y: auto;
+      animation: scaleIn 0.2s ease;
+      box-shadow: var(--shadow-xl);
+    }
+
+    .pago-modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .pago-modal-header h5 {
+      font-weight: 700;
+      font-size: 16px;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .pago-modal-body { padding: 24px; }
+
+    .pago-modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes scaleIn {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    /* Responsive fixes */
+    @media (max-width: 768px) {
+      .pagos-stats {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .month-pills {
+        justify-content: center;
+      }
+    }
+  </style>
+
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#10b981">
+  <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+</head>
+
+<body>
+  <div class="app-layout" id="appLayout"></div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    // ============ STATE ============
+    const MESES = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+    const now = new Date();
+    let selectedMes = now.getMonth() + 1;
+    let selectedAnio = now.getFullYear();
+    let selectedEstado = '';
+    let selectedCategoria = '';
+    let selectedEscuela = '';
+    let searchQuery = '';
+    let pagosData = [];
+    let selectedIds = new Set();
+    let searchTimeout;
+    let categoriasData = [];
+    let escuelasData = [];
+
+    // ============ INIT ============
+    document.addEventListener('DOMContentLoaded', () => {
+      buildPage();
+    });
+
+    async function buildPage() {
+      const user = await loadUserInfo();
+      const layout = document.getElementById('appLayout');
+      layout.innerHTML = `
+        ${renderSidebar(user.nombre, user.rol)}
+        <main class="main-content">
+          <div class="top-bar">
+            <div>
+              <button class="menu-toggle" id="menuToggle"><i class="bi bi-list"></i></button>
+            </div>
+            <div>
+              <h4>Pagos Mensuales</h4>
+              <div class="breadcrumb">Control de pagos de jugadores</div>
+            </div>
+            <div>
+            </div>
+          </div>
+          <div class="content-area">
+            <!-- Stats -->
+            <div class="pagos-stats" id="pagosStats">
+              <div class="pago-stat-card total-card">
+                <div class="pago-stat-icon blue"><i class="bi bi-receipt"></i></div>
+                <div class="pago-stat-value" id="stat-total">--</div>
+                <div class="pago-stat-label">Total Registros</div>
+              </div>
+              <div class="pago-stat-card pagado-card">
+                <div class="pago-stat-icon green"><i class="bi bi-check-circle-fill"></i></div>
+                <div class="pago-stat-value" id="stat-pagados">--</div>
+                <div class="pago-stat-label">Pagados</div>
+              </div>
+              <div class="pago-stat-card pendiente-card">
+                <div class="pago-stat-icon amber"><i class="bi bi-clock-fill"></i></div>
+                <div class="pago-stat-value" id="stat-pendientes">--</div>
+                <div class="pago-stat-label">Pendientes</div>
+              </div>
+              <div class="pago-stat-card monto-card">
+                <div class="pago-stat-icon purple"><i class="bi bi-cash-stack"></i></div>
+                <div class="pago-stat-value" id="stat-monto">--</div>
+                <div class="pago-stat-label">Recaudado</div>
+              </div>
+            </div>
+
+            <!-- Filter bar -->
+            <div class="data-card mb-4 fade-in">
+              <div class="data-card-body">
+                <div class="row g-3 align-items-end">
+                  <div class="col-12">
+                    <label class="form-label-custom">Seleccionar Mes</label>
+                    <div class="month-pills" id="monthPills"></div>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label-custom">Año</label>
+                    <select id="anioFilter" class="form-select-custom" onchange="selectedAnio=parseInt(this.value); loadAll()">
+                    </select>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label-custom">Estado</label>
+                    <select id="estadoFilter" class="form-select-custom" onchange="selectedEstado=this.value; loadPagos()">
+                      <option value="">Todos</option>
+                      <option value="pagado">Pagados</option>
+                      <option value="pendiente">Pendientes</option>
+                    </select>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label-custom">Categoría</label>
+                    <select id="categoriaFilter" class="form-select-custom" onchange="selectedCategoria=this.value; loadPagos()">
+                      <option value="">Todas</option>
+                    </select>
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label-custom">Buscar jugador</label>
+                    <div class="search-bar">
+                      <i class="bi bi-search"></i>
+                      <input type="text" id="searchInput" class="form-control-custom" placeholder="Buscar por nombre..." oninput="handleSearch(this.value)">
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <button onclick="clearFilters()" class="btn-secondary-custom w-100 justify-content-center" id="btn-clear-filters">
+                      <i class="bi bi-x-circle"></i> Limpiar filtros
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Acciones masivas -->
+            <div id="accionesMasivas" style="display:none">
+              <div class="acciones-masivas">
+                <span class="count" id="selectedCount">0 seleccionados</span>
+                <button class="btn-primary-custom" onclick="marcarSeleccionados('pagado')" id="btn-marcar-pagados">
+                  <i class="bi bi-check-circle"></i> Marcar Pagados
+                </button>
+                <button class="btn-secondary-custom" onclick="marcarSeleccionados('pendiente')" id="btn-marcar-pendientes">
+                  <i class="bi bi-clock"></i> Marcar Pendientes
+                </button>
+                <button class="btn-secondary-custom" onclick="deselectAll()" id="btn-deselect">
+                  <i class="bi bi-x-lg"></i> Cancelar
+                </button>
+              </div>
+            </div>
+
+            <!-- Payments Table -->
+            <div class="data-card fade-in">
+              <div class="data-card-header">
+                <h5><i class="bi bi-cash-stack me-2" style="color:var(--primary)"></i> Pagos del Mes</h5>
+                <span class="badge-custom gray" id="totalBadge">0 registros</span>
+              </div>
+              <div style="overflow-x:auto">
+                <table class="table-custom">
+                  <thead>
+                    <tr>
+                      <th><input type="checkbox" class="pago-checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)"></th>
+                      <th>Jugador</th>
+                      <th>Categoría</th>
+                      <th>Mes</th>
+                      <th>Monto</th>
+                      <th>Estado</th>
+                      <th>Fecha Pago</th>
+                      <th>Método</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="pagosBody">
+                    <tr><td colspan="9" class="text-center" style="padding:40px;color:var(--text-muted)">Cargando...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </main>
+      `;
+
+      initSidebar();
+      document.getElementById('nav-pagos')?.classList.add('active');
+
+      renderMonthPills();
+      renderAnioOptions();
+      await loadCategorias();
+      await loadAll();
+    }
+
+    // ============ RENDER HELPERS ============
+    function renderMonthPills() {
+      const container = document.getElementById('monthPills');
+      container.innerHTML = MESES.slice(1).map((name, i) => {
+        const mes = i + 1;
+        return `<button class="month-pill ${mes === selectedMes ? 'active' : ''}"
+                  onclick="selectMonth(${mes})" id="month-${mes}">${name.substring(0, 3)}</button>`;
+      }).join('');
+    }
+
+    function renderAnioOptions() {
+      const select = document.getElementById('anioFilter');
+      const currentYear = new Date().getFullYear();
+      for (let y = currentYear + 1; y >= currentYear - 3; y--) {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = y;
+        if (y === selectedAnio) opt.selected = true;
+        select.appendChild(opt);
+      }
+    }
+
+    function selectMonth(mes) {
+      selectedMes = mes;
+      document.querySelectorAll('.month-pill').forEach(p => p.classList.remove('active'));
+      document.getElementById(`month-${mes}`)?.classList.add('active');
+      loadAll();
+    }
+
+    async function loadCategorias() {
+      try {
+        const data = await fetchAPI('/categorias');
+        if (data && data.success) {
+          categoriasData = data.data;
+          const select = document.getElementById('categoriaFilter');
+          data.data.forEach(cat => {
+            const opt = document.createElement('option');
+            opt.value = cat.id;
+            opt.textContent = cat.nombre;
+            select.appendChild(opt);
+          });
+        }
+      } catch (e) { console.error(e); }
+    }
+
+    function handleSearch(value) {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        searchQuery = value;
+        loadPagos();
+      }, 300);
+    }
+
+    function clearFilters() {
+      selectedEstado = '';
+      selectedCategoria = '';
+      searchQuery = '';
+      document.getElementById('estadoFilter').value = '';
+      document.getElementById('categoriaFilter').value = '';
+      document.getElementById('searchInput').value = '';
+      loadPagos();
+    }
+
+    // ============ LOAD DATA ============
+    async function loadAll() {
+      await Promise.all([loadResumen(), loadPagos()]);
+    }
+
+    async function loadResumen() {
+      try {
+        const data = await fetchAPI(`/pagos/api/resumen?mes=${selectedMes}&anio=${selectedAnio}`);
+        if (data && data.success) {
+          const r = data.data;
+          document.getElementById('stat-total').textContent = r.totalPagos;
+          document.getElementById('stat-pagados').textContent = r.pagados;
+          document.getElementById('stat-pendientes').textContent = r.pendientes;
+          document.getElementById('stat-monto').textContent = formatMoney(r.montoPagado);
+        }
+      } catch (e) { console.error(e); }
+    }
+
+    async function loadPagos() {
+      let url = `/pagos/api?mes=${selectedMes}&anio=${selectedAnio}`;
+      if (selectedEstado) url += `&estado=${selectedEstado}`;
+      if (selectedCategoria) url += `&categoria_id=${selectedCategoria}`;
+      if (searchQuery) url += `&search=${encodeURIComponent(searchQuery)}`;
+
+      try {
+        const data = await fetchAPI(url);
+        if (data && data.success) {
+          pagosData = data.data;
+          renderPagos(pagosData);
+          document.getElementById('totalBadge').textContent = `${pagosData.length} registros`;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // ============ RENDER TABLE ============
+    function renderPagos(pagos) {
+      const tbody = document.getElementById('pagosBody');
+      selectedIds.clear();
+      updateMasiveBar();
+
+      if (!pagos || pagos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state">
+          <i class="bi bi-cash-stack"></i>
+          <h5>No hay pagos en estos momentos</h5>
+          <p>Los recibos de cobro del mes se generarán automáticamente en el sistema.</p>
+        </div></td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = pagos.map(p => {
+        const jugador = p.jugador || {};
+        const categoria = jugador.categoria || {};
+        const isPagado = p.estado === 'pagado';
+
+        return `
+        <tr class="fade-in" id="pago-row-${p.id}">
+          <td>
+            <input type="checkbox" class="pago-checkbox" value="${p.id}"
+              ${selectedIds.has(p.id) ? 'checked' : ''}
+              onchange="toggleSelect(${p.id}, this.checked)">
+          </td>
+          <td>
+            <div style="display:flex;align-items:center;gap:10px">
+              ${jugador.foto
+              ? `<img src="${jugador.foto}" class="player-avatar" alt="${escapeHtml(jugador.nombre)}">`
+              : `<div class="player-avatar-placeholder">${(jugador.nombre || 'J').charAt(0).toUpperCase()}</div>`
+            }
+              <div>
+                <div style="font-weight:600;font-size:13px">${escapeHtml(jugador.nombre || '')}</div>
+                <div style="font-size:11px;color:var(--text-muted)">${escapeHtml(jugador.documento || '')}</div>
+              </div>
+            </div>
+          </td>
+          <td><span class="badge-custom green">${escapeHtml(categoria.nombre || 'Sin cat.')}</span></td>
+          <td><span style="font-weight:600;font-size:13px">${MESES[p.mes]} ${p.anio}</span></td>
+          <td><span style="font-weight:700;font-size:14px">$${formatNumber(p.monto)}</span></td>
+          <td>
+            <button class="estado-badge ${p.estado}" onclick="toggleEstado(${p.id}, '${p.estado}')" title="Clic para cambiar">
+              <i class="bi ${isPagado ? 'bi-check-circle-fill' : 'bi-clock-fill'}"></i>
+              ${isPagado ? 'Pagado' : 'Pendiente'}
+            </button>
+          </td>
+          <td style="font-size:12px;color:var(--text-secondary)">${p.fecha_pago ? formatDateShort(p.fecha_pago) : '<span style="color:var(--text-muted)">—</span>'}</td>
+          <td style="font-size:12px">${escapeHtml(p.metodo_pago || '—')}</td>
+          <td>
+            <div style="display:flex;gap:4px">
+              <button class="btn-icon view" title="Editar pago" onclick="showEditModal(${p.id})"><i class="bi bi-pencil"></i></button>
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    // ============ TOGGLE ESTADO ============
+    async function toggleEstado(id, currentEstado) {
+      const newEstado = currentEstado === 'pagado' ? 'pendiente' : 'pagado';
+      try {
+        const data = await fetchAPI(`/pagos/api/${id}`, {
+          method: 'PUT',
+          body: { estado: newEstado }
+        });
+        if (data && data.success) {
+          showToast(newEstado === 'pagado' ? '✅ Pago registrado' : '⏳ Marcado como pendiente');
+          await loadAll();
+        }
+      } catch (e) {
+        showToast(e.message || 'Error al actualizar', 'error');
+      }
+    }
+
+    // ============ SELECTION ============
+    function toggleSelect(id, checked) {
+      if (checked) {
+        selectedIds.add(id);
+      } else {
+        selectedIds.delete(id);
+      }
+      updateMasiveBar();
+    }
+
+    function toggleSelectAll(checked) {
+      selectedIds.clear();
+      if (checked) {
+        pagosData.forEach(p => selectedIds.add(p.id));
+      }
+      document.querySelectorAll('.pago-checkbox[value]').forEach(cb => {
+        cb.checked = checked;
+      });
+      updateMasiveBar();
+    }
+
+    function deselectAll() {
+      selectedIds.clear();
+      document.querySelectorAll('.pago-checkbox').forEach(cb => cb.checked = false);
+      updateMasiveBar();
+    }
+
+    function updateMasiveBar() {
+      const bar = document.getElementById('accionesMasivas');
+      const count = document.getElementById('selectedCount');
+      if (selectedIds.size > 0) {
+        bar.style.display = 'block';
+        count.textContent = `${selectedIds.size} seleccionado${selectedIds.size > 1 ? 's' : ''}`;
+      } else {
+        bar.style.display = 'none';
+      }
+    }
+
+    async function marcarSeleccionados(estado) {
+      try {
+        const data = await fetchAPI('/pagos/api/masivo', {
+          method: 'PUT',
+          body: { ids: Array.from(selectedIds), estado }
+        });
+        if (data && data.success) {
+          showToast(data.message);
+          deselectAll();
+          await loadAll();
+        }
+      } catch (e) {
+        showToast(e.message || 'Error', 'error');
+      }
+    }
+
+    // ============ GENERAR MODAL ============
+    function showGenerarModal() {
+      const modal = document.createElement('div');
+      modal.className = 'pago-modal-backdrop';
+      modal.id = 'generarModal';
+      modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+      modal.innerHTML = `
+        <div class="pago-modal">
+          <div class="pago-modal-header">
+            <h5><i class="bi bi-plus-circle-fill" style="color:var(--primary)"></i> Generar Pagos del Mes</h5>
+            <button class="btn-icon" onclick="document.getElementById('generarModal').remove()"><i class="bi bi-x-lg"></i></button>
+          </div>
+          <div class="pago-modal-body">
+            <p style="color:var(--text-secondary);font-size:13px;margin-bottom:20px">
+              Se generará un registro de pago <strong>pendiente</strong> para cada jugador registrado.
+              Los jugadores que ya tengan un pago para este mes no serán duplicados.
+            </p>
+            <div class="row g-3">
+              <div class="col-6">
+                <label class="form-label-custom">Mes</label>
+                <select id="genMes" class="form-select-custom">
+                  ${MESES.slice(1).map((m, i) => `<option value="${i + 1}" ${i + 1 === selectedMes ? 'selected' : ''}>${m}</option>`).join('')}
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label-custom">Año</label>
+                <select id="genAnio" class="form-select-custom">
+                  ${(() => {
+                    const cy = new Date().getFullYear();
+                    let opts = '';
+                    for (let y = cy + 1; y >= cy - 2; y--) {
+                      opts += `<option value="${y}" ${y === selectedAnio ? 'selected' : ''}>${y}</option>`;
+                    }
+                    return opts;
+                  })()}
+                </select>
+              </div>
+              <div class="col-12 text-muted" style="font-size: 13px;">
+                <i class="bi bi-info-circle"></i> El cobro mensual se tomará automáticamente del valor configurado en tu sección "Mi Escuela".
+                <input type="hidden" id="genMonto" value="0">
+              </div>
+            </div>
+          </div>
+          <div class="pago-modal-footer">
+            <button class="btn-secondary-custom" onclick="document.getElementById('generarModal').remove()">Cancelar</button>
+            <button class="btn-primary-custom" onclick="generarPagos()" id="btn-confirm-generar">
+              <i class="bi bi-check-circle"></i> Generar
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+    }
+
+    async function generarPagos() {
+      const mes = document.getElementById('genMes').value;
+      const anio = document.getElementById('genAnio').value;
+      const monto = document.getElementById('genMonto').value;
+
+      try {
+        const data = await fetchAPI('/pagos/api/generar', {
+          method: 'POST',
+          body: { mes: parseInt(mes), anio: parseInt(anio), monto: parseFloat(monto) || 0 }
+        });
+        if (data && data.success) {
+          showToast(data.message);
+          document.getElementById('generarModal').remove();
+          selectedMes = parseInt(mes);
+          selectedAnio = parseInt(anio);
+          renderMonthPills();
+          document.getElementById('anioFilter').value = anio;
+          await loadAll();
+        }
+      } catch (e) {
+        showToast(e.message || 'Error al generar pagos', 'error');
+      }
+    }
+
+    // ============ EDIT MODAL ============
+    function showEditModal(id) {
+      const pago = pagosData.find(p => p.id === id);
+      if (!pago) return;
+
+      const modal = document.createElement('div');
+      modal.className = 'pago-modal-backdrop';
+      modal.id = 'editModal';
+      modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+      const jugador = pago.jugador || {};
+
+      modal.innerHTML = `
+        <div class="pago-modal">
+          <div class="pago-modal-header">
+            <h5><i class="bi bi-pencil-fill" style="color:var(--secondary)"></i> Editar Pago</h5>
+            <button class="btn-icon" onclick="document.getElementById('editModal').remove()"><i class="bi bi-x-lg"></i></button>
+          </div>
+          <div class="pago-modal-body">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;padding:16px;background:rgba(15,23,42,0.5);border-radius:var(--radius-sm)">
+              ${jugador.foto
+                ? `<img src="${jugador.foto}" class="player-avatar" alt="${escapeHtml(jugador.nombre)}">`
+                : `<div class="player-avatar-placeholder">${(jugador.nombre || 'J').charAt(0).toUpperCase()}</div>`
+              }
+              <div>
+                <div style="font-weight:700;font-size:15px">${escapeHtml(jugador.nombre || '')}</div>
+                <div style="font-size:12px;color:var(--text-muted)">${MESES[pago.mes]} ${pago.anio}</div>
+              </div>
+            </div>
+
+            <div class="row g-3">
+              <div class="col-6">
+                <label class="form-label-custom">Estado</label>
+                <select id="editEstado" class="form-select-custom" disabled style="background-color: rgba(15,23,42,0.3); cursor: not-allowed;" title="Cámbialo desde la tabla principal">
+                  <option value="pendiente" ${pago.estado === 'pendiente' ? 'selected' : ''}>Pendiente</option>
+                  <option value="pagado" ${pago.estado === 'pagado' ? 'selected' : ''}>Pagado</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label-custom">Monto ($)</label>
+                <input type="number" id="editMonto" class="form-control-custom" value="${pago.monto || 0}" readonly style="background-color: rgba(15,23,42,0.3); cursor: not-allowed;" title="El monto mensual automático se define en Mi Escuela">
+              </div>
+              <div class="col-6">
+                <label class="form-label-custom">Fecha de Pago</label>
+                <input type="date" id="editFechaPago" class="form-control-custom" value="${pago.fecha_pago || ''}">
+              </div>
+              <div class="col-6">
+                <label class="form-label-custom">Método de Pago</label>
+                <select id="editMetodo" class="form-select-custom">
+                  <option value="">Sin especificar</option>
+                  <option value="Efectivo" ${pago.metodo_pago === 'Efectivo' ? 'selected' : ''}>Efectivo</option>
+                  <option value="Transferencia" ${pago.metodo_pago === 'Transferencia' ? 'selected' : ''}>Transferencia</option>
+                  <option value="Nequi" ${pago.metodo_pago === 'Nequi' ? 'selected' : ''}>Nequi</option>
+                  <option value="Daviplata" ${pago.metodo_pago === 'Daviplata' ? 'selected' : ''}>Daviplata</option>
+                  <option value="Otro" ${pago.metodo_pago === 'Otro' ? 'selected' : ''}>Otro</option>
+                </select>
+              </div>
+              <div class="col-12">
+                <label class="form-label-custom">Referencia / Comprobante</label>
+                <input type="text" id="editReferencia" class="form-control-custom" placeholder="Número de referencia..." value="${escapeHtml(pago.referencia || '')}">
+              </div>
+              <div class="col-12">
+                <label class="form-label-custom">Notas</label>
+                <textarea id="editNotas" class="form-control-custom" rows="2" placeholder="Notas adicionales...">${escapeHtml(pago.notas || '')}</textarea>
+              </div>
+            </div>
+          </div>
+          <div class="pago-modal-footer">
+            <button class="btn-secondary-custom" onclick="document.getElementById('editModal').remove()">Cancelar</button>
+            <button class="btn-primary-custom" onclick="guardarEdicion(${pago.id})" id="btn-save-edit">
+              <i class="bi bi-check-circle"></i> Guardar
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+    }
+
+    async function guardarEdicion(id) {
+      const body = {
+        estado: document.getElementById('editEstado').value,
+        monto: parseFloat(document.getElementById('editMonto').value) || 0,
+        fecha_pago: document.getElementById('editFechaPago').value || null,
+        metodo_pago: document.getElementById('editMetodo').value || null,
+        referencia: document.getElementById('editReferencia').value || null,
+        notas: document.getElementById('editNotas').value || null
+      };
+
+      try {
+        const data = await fetchAPI(`/pagos/api/${id}`, {
+          method: 'PUT',
+          body
+        });
+        if (data && data.success) {
+          showToast(data.message);
+          document.getElementById('editModal').remove();
+          await loadAll();
+        }
+      } catch (e) {
+        showToast(e.message || 'Error al guardar', 'error');
+      }
+    }
+
+    // ============ DELETE (REMOVED) ============
+
+    // ============ FORMAT HELPERS ============
+    function formatMoney(value) {
+      if (value === null || value === undefined) return '$0';
+      return '$' + formatNumber(value);
+    }
+
+    function formatNumber(value) {
+      return Number(value).toLocaleString('es-CO');
+    }
+  </script>
+</body>
+
+</html>

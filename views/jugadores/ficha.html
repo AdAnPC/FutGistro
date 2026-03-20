@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Ficha completa del jugador">
+  <title>Ficha del Jugador | futGistro</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#10b981">
+  <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+</head>
+
+<body>
+  <div class="app-layout" id="appLayout"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    let jugadorId = null;
+    let jugadorData = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const pathParts = window.location.pathname.split('/');
+      jugadorId = pathParts[pathParts.length - 1];
+      buildPage();
+    });
+
+    async function buildPage() {
+      const user = await loadUserInfo();
+      const layout = document.getElementById('appLayout');
+      layout.innerHTML = `
+        ${renderSidebar(user.nombre, user.rol)}
+        <main class="main-content">
+          <div class="top-bar">
+            <div>
+              <button class="menu-toggle" id="menuToggle"><i class="bi bi-list"></i></button>
+            </div>
+            <div>
+              <h4>Ficha del Jugador</h4>
+              <div class="breadcrumb">
+                <a href="/jugadores/page" style="color:var(--text-muted);text-decoration:none">Jugadores</a> / Ficha
+              </div>
+            </div>
+              <a href="/jugadores/page" class="btn-secondary-custom" id="btn-back">
+                <i class="bi bi-arrow-left"></i> Volver
+              </a>
+          </div>
+          <div class="content-area" id="fichaContent">
+            <div class="text-center" style="padding:60px"><div class="spinner mx-auto"></div><p style="margin-top:16px;color:var(--text-muted)">Cargando ficha...</p></div>
+          </div>
+        </main>
+      `;
+
+      initSidebar();
+      document.getElementById('nav-jugadores')?.classList.add('active');
+      await loadFicha();
+    }
+
+    async function loadFicha() {
+      try {
+        const data = await fetchAPI(`/jugadores/api/${jugadorId}`);
+        if (data && data.success) {
+          jugadorData = data.data;
+          renderFicha(data.data);
+        }
+      } catch (e) {
+        document.getElementById('fichaContent').innerHTML = `
+          <div class="empty-state">
+            <i class="bi bi-exclamation-circle"></i>
+            <h5>Error al cargar la ficha</h5>
+            <p>${escapeHtml(e.message)}</p>
+            <a href="/jugadores/page" class="btn-primary-custom mt-3"><i class="bi bi-arrow-left"></i> Volver</a>
+          </div>
+        `;
+      }
+    }
+
+    function renderFicha(j) {
+      const edad = j.edad || calcularEdad(j.fecha_nacimiento);
+      const container = document.getElementById('fichaContent');
+
+      container.innerHTML = `
+        <!-- Header -->
+        <div class="ficha-header fade-in">
+          ${j.foto
+          ? `<img src="${j.foto}" class="player-avatar-lg" alt="${escapeHtml(j.nombre)}">`
+          : `<div class="player-avatar-lg d-flex align-items-center justify-content-center" style="background:linear-gradient(135deg,var(--primary),var(--secondary));font-size:48px;font-weight:800;color:white">${j.nombre.charAt(0).toUpperCase()}</div>`
+        }
+          <div class="ficha-info">
+            <h3>${escapeHtml(j.nombre)}</h3>
+            <div class="categoria">${j.categoria ? escapeHtml(j.categoria.nombre) : 'Sin categoría'}</div>
+            <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+              <span class="badge-custom cyan"><i class="bi bi-calendar3 me-1"></i> ${edad} años</span>
+              <span class="badge-custom green"><i class="bi bi-card-text me-1"></i> ${escapeHtml(j.documento)}</span>
+              ${j.escuela ? `<span class="badge-custom amber"><i class="bi bi-geo-alt me-1"></i> ${escapeHtml(j.escuela.nombre)}</span>` : ''}
+            </div>
+            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+              <a href="/jugadores/editar/${j.id}" class="btn-primary-custom flex-grow-1 text-center justify-content-center" id="btn-edit-player" style="padding:8px; font-size:13px;">
+                <i class="bi bi-pencil"></i> Editar
+              </a>
+              <button onclick="eliminarJugador()" class="btn-danger-custom flex-grow-1 text-center justify-content-center" id="btn-delete-player" style="padding:8px; font-size:13px;">
+                <i class="bi bi-trash"></i> Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mobile-friendly main actions -->
+        <div class="row g-2 mb-4 slide-up justify-content-center" style="animation-delay: 0.05s">
+          <div class="col-md-6 col-12 d-flex justify-content-center">
+            <button class="btn d-flex align-items-center justify-content-center gap-2" onclick="generarFichaTecnica()" id="btn-ficha" style="width: 100%; max-width: 250px; color:white; background:linear-gradient(135deg, var(--info), #0284c7); border:none; padding:10px 12px; border-radius:var(--radius-md); font-weight:600; font-size:13px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: transform 0.2s;">
+              <i class="bi bi-file-earmark-pdf-fill" style="font-size:16px;"></i>
+              Descargar Ficha
+            </button>
+          </div>
+          <div class="col-md-6 col-12 d-flex justify-content-center">
+            <button class="btn d-flex align-items-center justify-content-center gap-2" onclick="document.getElementById('paymentHistory').parentElement.scrollIntoView({behavior: 'smooth'})" style="width: 100%; max-width: 250px; color:white; background:linear-gradient(135deg, var(--success), #059669); border:none; padding:10px 12px; border-radius:var(--radius-md); font-weight:600; font-size:13px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: transform 0.2s;">
+              <i class="bi bi-eye-fill" style="font-size:16px;"></i>
+              Ver Historial de Pago
+            </button>
+          </div>
+        </div>
+
+
+          <!--
+          <div class="col-6">
+            <button class="btn w-100 d-flex align-items-center justify-content-center gap-2" onclick="generarCarnet()" id="btn-carnet" style="color:white; background:linear-gradient(135deg, var(--primary), #059669); border:none; padding:10px 12px; border-radius:var(--radius-md); font-weight:600; font-size:13px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: transform 0.2s;">
+              <i class="bi bi-credit-card-2-front-fill" style="font-size:16px;"></i>
+              Generar Carnet
+            </button>
+          </div>
+          -->
+
+          
+        </div>
+        <!-- Personal Details -->
+        <div class="data-card mb-4 slide-up">
+          <div class="data-card-header">
+            <h5><i class="bi bi-person-fill me-2" style="color:var(--primary)"></i> Datos Personales</h5>
+          </div>
+          <div class="data-card-body">
+            <div class="ficha-detail-grid">
+              <div class="ficha-detail-item">
+                <label>Nombre Completo</label>
+                <span>${escapeHtml(j.nombre)}</span>
+              </div>
+              <div class="ficha-detail-item">
+                <label>Fecha de Nacimiento</label>
+                <span>${formatDate(j.fecha_nacimiento)}</span>
+              </div>
+              <div class="ficha-detail-item">
+                <label>Edad</label>
+                <span>${edad} años</span>
+              </div>
+              <div class="ficha-detail-item">
+                <label>Lugar de Nacimiento</label>
+                <span>${escapeHtml(j.lugar_nacimiento || 'No registrado')}</span>
+              </div>
+              <div class="ficha-detail-item">
+                <label>Estatura / Peso</label>
+                <span>${j.estatura ? escapeHtml(j.estatura) : '--'} / ${j.peso ? escapeHtml(j.peso) : '--'}</span>
+              </div>
+              <div class="ficha-detail-item">
+                <label>Documento</label>
+                <span>${escapeHtml(j.documento)}</span>
+              </div>
+              <div class="ficha-detail-item">
+                <label>Tipo de Sangre / RH</label>
+                <span>${escapeHtml(j.tipo_sangre || 'No registrado')}</span>
+              </div>
+              <div class="ficha-detail-item">
+                <label>EPS</label>
+                <span>${escapeHtml(j.eps || 'No registrada')}</span>
+              </div>
+              <div class="ficha-detail-item">
+                <label>Ciudad / Vereda</label>
+                <span>${escapeHtml(j.ciudad || 'No registrada')}</span>
+              </div>
+              <div class="ficha-detail-item">
+                <label>Dirección</label>
+                <span>${escapeHtml(j.direccion || 'No registrada')}</span>
+              </div>
+              <div class="ficha-detail-item">
+                <label>Teléfono Celular</label>
+                <span>${escapeHtml(j.telefono || 'No registrado')}</span>
+              </div>
+              <div class="ficha-detail-item">
+                <label>Teléfono</label>
+                <span>${escapeHtml(j.numero_fijo || 'No registrado')}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Parent/Guardian -->
+        <div class="data-card mb-4 slide-up" style="animation-delay: 0.1s">
+          <div class="data-card-header">
+            <h5><i class="bi bi-people-fill me-2" style="color:var(--secondary)"></i> Padre / Acudiente</h5>
+          </div>
+          <div class="data-card-body">
+            <div class="ficha-detail-grid">
+              <div class="ficha-detail-item">
+                <label>Nombre del Padre/Acudiente</label>
+                <span>${escapeHtml(j.nombre_padre)}</span>
+              </div>
+              <div class="ficha-detail-item">
+                <label>CC del Padre</label>
+                <span>${escapeHtml(j.cc_padre || 'No registrada')}</span>
+              </div>
+              <div class="ficha-detail-item">
+                <label>Nombre de la Madre</label>
+                <span>${escapeHtml(j.nombre_madre || 'No registrada')}</span>
+              </div>
+              <div class="ficha-detail-item">
+                <label>CC de la Madre</label>
+                <span>${escapeHtml(j.cc_madre || 'No registrada')}</span>
+              </div>
+              <div class="ficha-detail-item">
+                <label>Teléfono (Emergencia)</label>
+                <span>${escapeHtml(j.telefono_padre || 'No registrado')}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Enrollment -->
+        <div class="data-card mb-4 slide-up" style="animation-delay: 0.15s">
+          <div class="data-card-header">
+            <h5><i class="bi bi-trophy-fill me-2" style="color:var(--accent)"></i> Datos de Inscripción</h5>
+          </div>
+          <div class="data-card-body">
+            <div class="ficha-detail-grid">
+              <div class="ficha-detail-item">
+                <label>Categoría</label>
+                <span>${j.categoria ? escapeHtml(j.categoria.nombre) : 'Sin categoría'}</span>
+              </div>
+              <div class="ficha-detail-item">
+                <label>Escuela / Sede</label>
+                <span>${j.escuela ? escapeHtml(j.escuela.nombre) : 'No registrada'}</span>
+              </div>
+              <div class="ficha-detail-item">
+                <label>Fecha de Inscripción</label>
+                <span>${formatDate(j.fecha_registro)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Documents (max 7) -->
+        <div class="data-card mb-4 slide-up" style="animation-delay: 0.2s">
+          <div class="data-card-header">
+            <h5><i class="bi bi-file-earmark-image-fill me-2" style="color:var(--info)"></i> Documentos y Fotos</h5>
+            <span class="badge-custom gray" style="font-size:11px">Máximo 7 archivos</span>
+          </div>
+          <div class="data-card-body">
+            <div class="row g-4">
+              <div class="col-md-4 text-center">
+                <label class="form-label-custom">1. Foto del Jugador</label>
+                ${j.foto
+          ? `<div><img src="${j.foto}" class="doc-preview" alt="Foto" onclick="window.open('${j.foto}','_blank')">
+                     <div class="mt-2"><a href="${j.foto}" download class="btn-secondary-custom" style="font-size:12px"><i class="bi bi-download"></i> Descargar</a></div></div>`
+          : `<div style="color:var(--text-muted);font-size:13px"><i class="bi bi-image d-block" style="font-size:40px;opacity:0.3;margin-bottom:8px"></i>No disponible</div>`
+        }
+              </div>
+              <div class="col-md-4 text-center">
+                <label class="form-label-custom">2. Tarjeta Identidad (Frente)</label>
+                ${j.documento_extra2
+          ? `<div><img src="${j.documento_extra2}" class="doc-preview" alt="Tarjeta Identidad" onclick="window.open('${j.documento_extra2}','_blank')">
+                     <div class="mt-2"><a href="${j.documento_extra2}" download class="btn-secondary-custom" style="font-size:12px"><i class="bi bi-download"></i> Descargar</a></div></div>`
+          : `<div style="color:var(--text-muted);font-size:13px"><i class="bi bi-file-earmark-person d-block" style="font-size:40px;opacity:0.3;margin-bottom:8px"></i>No disponible</div>`
+        }
+              </div>
+              <div class="col-md-4 text-center">
+                <label class="form-label-custom">3. Tarjeta Identidad (Reverso)</label>
+                ${j.documento_extra4
+          ? `<div><img src="${j.documento_extra4}" class="doc-preview" alt="Tarjeta Identidad Reverso" onclick="window.open('${j.documento_extra4}','_blank')">
+                     <div class="mt-2"><a href="${j.documento_extra4}" download class="btn-secondary-custom" style="font-size:12px"><i class="bi bi-download"></i> Descargar</a></div></div>`
+          : `<div style="color:var(--text-muted);font-size:13px"><i class="bi bi-file-earmark-person d-block" style="font-size:40px;opacity:0.3;margin-bottom:8px"></i>No disponible</div>`
+        }
+              </div>
+              <div class="col-md-4 text-center">
+                <label class="form-label-custom">4. Registro Civil</label>
+                ${j.registro_civil
+          ? `<div><img src="${j.registro_civil}" class="doc-preview" alt="Registro Civil" onclick="window.open('${j.registro_civil}','_blank')">
+                     <div class="mt-2"><a href="${j.registro_civil}" download class="btn-secondary-custom" style="font-size:12px"><i class="bi bi-download"></i> Descargar</a></div></div>`
+          : `<div style="color:var(--text-muted);font-size:13px"><i class="bi bi-file-earmark-text d-block" style="font-size:40px;opacity:0.3;margin-bottom:8px"></i>No disponible</div>`
+        }
+              </div>
+              <div class="col-md-4 text-center">
+                <label class="form-label-custom">5. Documento del padre o madre</label>
+                ${j.documento_acudiente
+          ? `<div><img src="${j.documento_acudiente}" class="doc-preview" alt="Documento Acudiente" onclick="window.open('${j.documento_acudiente}','_blank')">
+                     <div class="mt-2"><a href="${j.documento_acudiente}" download class="btn-secondary-custom" style="font-size:12px"><i class="bi bi-download"></i> Descargar</a></div></div>`
+          : `<div style="color:var(--text-muted);font-size:13px"><i class="bi bi-file-earmark-person d-block" style="font-size:40px;opacity:0.3;margin-bottom:8px"></i>No disponible</div>`
+        }
+              </div>
+              <div class="col-md-4 text-center">
+                <label class="form-label-custom">6. Certificado de EPS</label>
+                ${j.documento_extra1
+          ? `<div><img src="${j.documento_extra1}" class="doc-preview" alt="Certificado de EPS" onclick="window.open('${j.documento_extra1}','_blank')">
+                     <div class="mt-2"><a href="${j.documento_extra1}" download class="btn-secondary-custom" style="font-size:12px"><i class="bi bi-download"></i> Descargar</a></div></div>`
+          : `<div style="color:var(--text-muted);font-size:13px"><i class="bi bi-file-earmark-plus d-block" style="font-size:40px;opacity:0.3;margin-bottom:8px"></i>No disponible</div>`
+        }
+              </div>
+              <div class="col-md-4 text-center">
+                <label class="form-label-custom">7. Certificado de estudio</label>
+                ${j.documento_extra3
+          ? `<div><img src="${j.documento_extra3}" class="doc-preview" alt="Certificado de estudio" onclick="window.open('${j.documento_extra3}','_blank')">
+                     <div class="mt-2"><a href="${j.documento_extra3}" download class="btn-secondary-custom" style="font-size:12px"><i class="bi bi-download"></i> Descargar</a></div></div>`
+          : `<div style="color:var(--text-muted);font-size:13px"><i class="bi bi-file-earmark-plus d-block" style="font-size:40px;opacity:0.3;margin-bottom:8px"></i>No disponible</div>`
+        }
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Signatures -->
+        <div class="data-card mb-4 slide-up" style="animation-delay: 0.25s">
+          <div class="data-card-header">
+            <h5><i class="bi bi-pen-fill me-2" style="color:var(--primary)"></i> Firmas de Autorización</h5>
+          </div>
+          <div class="data-card-body">
+            <div class="row text-center g-4">
+              <div class="col-md-6">
+                <h6 class="text-muted" style="font-size:12px;margin-bottom:12px">Firma del Acudiente</h6>
+                ${j.firma_padre
+          ? `<img src="${j.firma_padre}" style="max-height:150px;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:white;padding:8px" alt="Firma Padre">`
+          : `<div style="color:var(--text-muted);font-size:13px"><i class="bi bi-pen d-block" style="font-size:40px;opacity:0.3;margin-bottom:8px"></i>Pendiente</div>`
+        }
+              </div>
+              <div class="col-md-6">
+                <h6 class="text-muted" style="font-size:12px;margin-bottom:12px">Firma del Entrenador</h6>
+                ${j.firma_entrenador
+          ? `<img src="${j.firma_entrenador}" style="max-height:150px;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:white;padding:8px" alt="Firma Entrenador">`
+          : `<div style="color:var(--text-muted);font-size:13px"><i class="bi bi-pen d-block" style="font-size:40px;opacity:0.3;margin-bottom:8px"></i>Pendiente</div>`
+        }
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Attendance History -->
+        <div class="data-card slide-up mb-4" style="animation-delay: 0.3s">
+          <div class="data-card-header">
+            <h5><i class="bi bi-calendar-check-fill me-2" style="color:var(--accent)"></i> Historial de Asistencia</h5>
+          </div>
+          <div class="data-card-body" id="attendanceHistory">
+            <div class="text-center" style="color:var(--text-muted);padding:20px">Cargando historial...</div>
+          </div>
+        </div>
+
+        <!-- Payment History -->
+        <div class="data-card slide-up" style="animation-delay: 0.35s">
+          <div class="data-card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-cash-stack me-2" style="color:var(--success)"></i> Historial de Pagos</h5>
+            <div>
+              <button class="btn-secondary-custom me-2" onclick="generarPazYSalvo()" style="font-size: 12px; padding: 6px 14px;" title="Generar Paz y Salvo">
+                <i class="bi bi-award"></i> Paz y Salvo
+              </button>
+              <button class="btn-secondary-custom" onclick="descargarHistorialPagosPDF()" style="font-size: 12px; padding: 6px 14px;" title="Descargar como PDF">
+                <i class="bi bi-file-earmark-pdf"></i> PDF
+              </button>
+            </div>
+          </div>
+          <div class="data-card-body" id="paymentHistory">
+            <div class="text-center" style="color:var(--text-muted);padding:20px">Cargando historial de pagos...</div>
+          </div>
+        </div>
+      `;
+
+      // Load attendance & payments
+      loadAttendanceHistory();
+      loadPaymentHistory();
+    }
+
+    async function loadAttendanceHistory() {
+      try {
+        const data = await fetchAPI(`/asistencia/api/historial/${jugadorId}`);
+        const container = document.getElementById('attendanceHistory');
+
+        if (data && data.success) {
+          const { resumen, registros } = data.data;
+
+          let html = `
+            <div class="row g-3 mb-4">
+              <div class="col-md-3 col-6">
+                <div style="text-align:center;padding:16px;background:rgba(16,185,129,0.08);border-radius:var(--radius-sm)">
+                  <div style="font-size:24px;font-weight:800;color:var(--primary-light)">${resumen.presentes}</div>
+                  <div style="font-size:12px;color:var(--text-muted)">Presentes</div>
+                </div>
+              </div>
+              <div class="col-md-3 col-6">
+                <div style="text-align:center;padding:16px;background:rgba(239,68,68,0.08);border-radius:var(--radius-sm)">
+                  <div style="font-size:24px;font-weight:800;color:var(--danger)">${resumen.ausentes}</div>
+                  <div style="font-size:12px;color:var(--text-muted)">Ausentes</div>
+                </div>
+              </div>
+              <div class="col-md-3 col-6">
+                <div style="text-align:center;padding:16px;background:rgba(245,158,11,0.08);border-radius:var(--radius-sm)">
+                  <div style="font-size:24px;font-weight:800;color:var(--accent)">${resumen.tardanzas}</div>
+                  <div style="font-size:12px;color:var(--text-muted)">Tardanzas</div>
+                </div>
+              </div>
+              <div class="col-md-3 col-6">
+                <div style="text-align:center;padding:16px;background:rgba(6,182,212,0.08);border-radius:var(--radius-sm)">
+                  <div style="font-size:24px;font-weight:800;color:var(--info)">${resumen.justificados}</div>
+                  <div style="font-size:12px;color:var(--text-muted)">Justificados</div>
+                </div>
+              </div>
+            </div>
+          `;
+
+          if (registros.length > 0) {
+            html += `<div style="overflow-x:auto"><table class="table-custom"><thead><tr><th>Fecha</th><th>Estado</th><th>Observación</th></tr></thead><tbody>`;
+            registros.forEach(r => {
+              const badgeClass = r.estado === 'presente' ? 'green' : r.estado === 'ausente' ? 'red' : r.estado === 'tardanza' ? 'amber' : 'cyan';
+              html += `<tr>
+                <td>${formatDate(r.fecha)}</td>
+                <td><span class="badge-custom ${badgeClass}">${r.estado}</span></td>
+                <td style="color:var(--text-muted);font-size:13px">${escapeHtml(r.observacion || '-')}</td>
+              </tr>`;
+            });
+            html += `</tbody></table></div>`;
+          } else {
+            html += `<div class="text-center" style="color:var(--text-muted);padding:20px"><i class="bi bi-calendar-x d-block" style="font-size:32px;opacity:0.3;margin-bottom:8px"></i>Sin registros de asistencia</div>`;
+          }
+
+          container.innerHTML = html;
+        }
+      } catch (e) {
+        document.getElementById('attendanceHistory').innerHTML = `<div class="text-center" style="color:var(--text-muted);padding:20px">No se pudo cargar el historial</div>`;
+      }
+    }
+
+    async function loadPaymentHistory() {
+      try {
+        const data = await fetchAPI(`/pagos/api/jugador/${jugadorId}`);
+        const container = document.getElementById('paymentHistory');
+
+        if (data && data.success) {
+          const pagos = data.data;
+          window.pagosJugador = pagos; // para el PDF
+          
+          if (pagos.length > 0) {
+            let html = `<div style="overflow-x:auto"><table class="table-custom"><thead><tr><th>Mes</th><th>Monto</th><th>Estado</th><th>Fecha de Pago</th></tr></thead><tbody>`;
+            const MESES = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+            pagos.forEach(p => {
+              const badgeClass = p.estado === 'pagado' ? 'green' : 'amber';
+              const estado = p.estado === 'pagado' ? 'Pagado' : 'Pendiente';
+              html += `<tr>
+                <td style="font-weight:600">${MESES[p.mes]} ${p.anio}</td>
+                <td>$${Number(p.monto).toLocaleString('es-CO')}</td>
+                <td><span class="badge-custom ${badgeClass}">${estado}</span></td>
+                <td style="color:var(--text-muted);font-size:13px">${p.fecha_pago ? formatDate(p.fecha_pago) : '-'}</td>
+              </tr>`;
+            });
+            html += `</tbody></table></div>`;
+            container.innerHTML = html;
+          } else {
+             container.innerHTML = `<div class="text-center" style="color:var(--text-muted);padding:20px"><i class="bi bi-receipt d-block" style="font-size:32px;opacity:0.3;margin-bottom:8px"></i>Sin registros de pagos</div>`;
+          }
+        }
+      } catch (e) {
+        document.getElementById('paymentHistory').innerHTML = `<div class="text-center" style="color:var(--text-muted);padding:20px">No se pudo cargar el historial de pagos</div>`;
+      }
+    }
+
+    async function descargarHistorialPagosPDF() {
+      if (!jugadorData || !window.pagosJugador || window.pagosJugador.length === 0) {
+        return showToast('No hay pagos o faltan datos para descargar', 'error');
+      }
+      
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      
+      // Header background
+      doc.setFillColor(15, 23, 42); // very dark blue
+      doc.rect(0, 0, 210, 40, 'F');
+      
+      doc.setTextColor(16, 185, 129); // green title
+      doc.setFontSize(22);
+      doc.setFont('helvetica', 'bold');
+      doc.text('HISTORIAL DE PAGOS', 105, 20, { align: 'center' });
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Jugador: ${jugadorData.nombre}`, 105, 30, { align: 'center' });
+      
+      const MESES = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+      
+      // Calculate totals
+      let totalPagado = 0;
+      let totalPendiente = 0;
+      
+      const tableData = window.pagosJugador.map(p => {
+        const montoStr = `$${Number(p.monto).toLocaleString('es-CO')}`;
+        if(p.estado === 'pagado') totalPagado += Number(p.monto);
+        else totalPendiente += Number(p.monto);
+        
+        return [
+          `${MESES[p.mes]} ${p.anio}`,
+          montoStr,
+          p.estado === 'pagado' ? 'Pagado' : 'Pendiente',
+          p.fecha_pago ? formatDate(p.fecha_pago) : 'N/A'
+        ];
+      });
+      
+      doc.autoTable({
+        startY: 50,
+        head: [['Mes', 'Monto', 'Estado', 'Fecha de Pago']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [16, 185, 129], textColor: [255,255,255], fontStyle: 'bold' },
+        styles: { font: 'helvetica', fontSize: 10, cellPadding: 4 },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        didParseCell: function(data) {
+          if (data.section === 'body' && data.column.index === 2) {
+             if (data.cell.raw === 'Pagado') data.cell.styles.textColor = [16, 185, 129];
+             else data.cell.styles.textColor = [245, 158, 11];
+          }
+        }
+      });
+      
+      // Summary Block
+      const finalY = doc.lastAutoTable.finalY || 50;
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('RESUMEN:', 14, finalY + 15);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(20, 20, 20); 
+      doc.text(`Total Cancelado: $${Number(totalPagado).toLocaleString('es-CO')}`, 14, finalY + 25);
+      
+      doc.setTextColor(20, 20, 20); 
+      doc.text(`Deuda Pendiente: $${Number(totalPendiente).toLocaleString('es-CO')}`, 14, finalY + 32);
+      
+      doc.save(`Pagos_${jugadorData.nombre.replace(/\s+/g, '_')}.pdf`);
+    }
+
+    function showPazSalvoModal(defaultName, defaultCelular) {
+      return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        Object.assign(overlay.style, {
+            position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+            backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 99999, opacity: 0, transition: 'opacity 0.2s ease'
+        });
+
+        const modal = document.createElement('div');
+        modal.className = 'data-card fade-in';
+        Object.assign(modal.style, {
+            backgroundColor: 'var(--bg-secondary)', padding: '24px', borderRadius: 'var(--radius-lg)',
+            width: '90%', maxWidth: '420px',
+            boxShadow: 'var(--shadow-xl)', transform: 'translateY(20px)', transition: 'transform 0.2s ease',
+            color: 'var(--text-color)'
+        });
+
+        modal.innerHTML = `
+            <div class="text-center mb-3">
+              <i class="bi bi-award-fill" style="font-size: 38px; color: var(--success);"></i>
+              <h4 style="font-weight: 700; margin-top: 10px; margin-bottom: 5px;">Paz y Salvo</h4>
+              <p style="color: var(--text-muted); font-size: 13px;">Verifica la información de quien firma el documento.</p>
+            </div>
+            
+            <div class="mb-3 text-start">
+              <label class="form-label-custom">Nombre del Entrenador / Firmante</label>
+              <input type="text" id="pz-nombre" class="form-control-custom" value="${escapeHtml(defaultName)}" placeholder="Ej. Juan Pérez">
+            </div>
+            <div class="mb-3 text-start">
+              <label class="form-label-custom">Número de Documento (C.C)</label>
+              <input type="text" id="pz-id" class="form-control-custom" placeholder="Ej. 1012345678">
+            </div>
+            <div class="mb-4 text-start">
+              <label class="form-label-custom">Celular de Contacto</label>
+              <input type="text" id="pz-cel" class="form-control-custom" value="${escapeHtml(defaultCelular)}" placeholder="Ej. 3001234567">
+            </div>
+            
+            <div style="display: flex; gap: 12px; justify-content: center;">
+                <button id="btn-cancelar-pz" class="btn-secondary-custom" style="flex: 1; padding: 10px;"><i class="bi bi-x"></i> Cancelar</button>
+                <button id="btn-confirmar-pz" class="btn-primary-custom" style="flex: 1; padding: 10px;"><i class="bi bi-file-earmark-pdf"></i> Generar PDF</button>
+            </div>
+        `;
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        requestAnimationFrame(() => {
+            overlay.style.opacity = 1;
+            modal.style.transform = 'translateY(0)';
+        });
+
+        const cleanup = (result) => {
+            overlay.style.opacity = 0;
+            modal.style.transform = 'translateY(10px)';
+            setTimeout(() => {
+                if(document.body.contains(overlay)) document.body.removeChild(overlay);
+                resolve(result);
+            }, 200);
+        };
+
+        modal.querySelector('#btn-cancelar-pz').addEventListener('click', () => cleanup(null));
+        modal.querySelector('#btn-confirmar-pz').addEventListener('click', () => {
+            const n = document.getElementById('pz-nombre').value.trim();
+            const i = document.getElementById('pz-id').value.trim();
+            const c = document.getElementById('pz-cel').value.trim();
+            cleanup({ nombre: n, identificacion: i, celular: c });
+        });
+        
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) cleanup(null);
+        });
+      });
+    }
+
+    async function generarPazYSalvo() {
+      if (!jugadorData) return;
+      
+      const defaultName = window.__USER__ && window.__USER__.nombre ? window.__USER__.nombre : '';
+      const defaultCel = jugadorData.escuela && jugadorData.escuela.telefono ? jugadorData.escuela.telefono : '';
+      
+      const dataFirma = await showPazSalvoModal(defaultName, defaultCel);
+      if (!dataFirma) return; // canceló
+
+      const nombreEntrenador = dataFirma.nombre;
+      const identificacion = dataFirma.identificacion;
+      const celular = dataFirma.celular;
+
+      const btn = document.querySelector('button[onclick="generarPazYSalvo()"]');
+      if (btn) btn.innerHTML = '<div class="spinner" style="width:14px;height:14px;border-width:2px;display:inline-block"></div> Generando...';
+
+      const j = jugadorData;
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+      
+      const loadImg = async (url) => {
+        if (!url) return null;
+        if (url.startsWith('data:image')) return url;
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'Anonymous';
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width; canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/png'));
+          };
+          img.onerror = () => resolve(null);
+          img.src = url;
+        });
+      };
+      
+      const logoEscuelaBase64 = j.escuela && j.escuela.logo ? await loadImg(j.escuela.logo) : null;
+      const firmaEntrenadorBase64 = j.firma_entrenador ? await loadImg(j.firma_entrenador) : null;
+      const escuelaNombre = j.escuela ? j.escuela.nombre.toUpperCase() : 'NUESTRA ESCUELA DE FÚTBOL';
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const marginX = 25;
+      let y = 30;
+
+      // Draw aesthetic header like the image (dark blue / gold / green)
+      doc.setFillColor(15, 23, 42); 
+      doc.rect(0, 0, pageWidth, 40, 'F');
+      doc.setFillColor(16, 185, 129);
+      doc.rect(0, 40, pageWidth, 3, 'F');
+
+      if (logoEscuelaBase64) {
+        doc.addImage(logoEscuelaBase64, 'PNG', (pageWidth/2) - 15, 5, 30, 30);
+      } else {
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text(escuelaNombre, pageWidth/2, 25, { align: 'center' });
+      }
+
+      y = 70;
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(26);
+      doc.setFont('times', 'bold');
+      doc.text('CARTA DE PAZ Y SALVO', pageWidth / 2, y, { align: 'center' });
+
+      y += 15;
+      doc.setFontSize(12);
+      doc.setFont('times', 'bold');
+      // format date to long format (e.g. 15 de febrero de 2026)
+      const dateOpts = { day: 'numeric', month: 'long', year: 'numeric' };
+      const fechaActual = new Date().toLocaleDateString('es-ES', dateOpts);
+      doc.text(`Fecha: ${fechaActual}`, pageWidth - marginX, y, { align: 'right' });
+
+      y += 25;
+      doc.setFont('times', 'bold');
+      doc.setFontSize(14);
+      doc.text('A quien interese:', marginX, y);
+
+      y += 15;
+      
+      const tipoDoc = j.documento && j.documento.length > 7 ? 'Documento de Identidad' : 'Tarjeta de Identidad';
+      const p1 = `Por medio de la presente se deja en constancia que el joven ${j.nombre}, identificado(a) con ${tipoDoc} No. ${j.documento}, se encuentra a paz y salvo por todo concepto con la institución ${j.escuela ? j.escuela.nombre : 'deportiva'}.`;
+      
+      doc.setFont('times', 'normal');
+      doc.setFontSize(14);
+      const splitP1 = doc.splitTextToSize(p1, pageWidth - (marginX*2));
+      doc.text(splitP1, marginX, y, { lineHeightFactor: 1.5 });
+      
+      y += (splitP1.length * 8) + 10;
+      
+      const p2 = `La presente certificación se expide a solicitud del interesado para los fines que estime convenientes.`;
+      const splitP2 = doc.splitTextToSize(p2, pageWidth - (marginX*2));
+      doc.text(splitP2, marginX, y, { lineHeightFactor: 1.5 });
+
+      y += 30;
+      doc.text('Cordialmente,', marginX, y);
+
+      y += 25;
+      doc.setDrawColor(15, 23, 42);
+      doc.line(marginX, y, marginX + 80, y);
+      
+      if (firmaEntrenadorBase64) {
+        doc.addImage(firmaEntrenadorBase64, 'PNG', marginX + 10, y - 25, 60, 22);
+      }
+      
+      y += 6;
+      doc.setFont('times', 'bold');
+      doc.text(nombreEntrenador || 'Firma Entrenador', marginX, y);
+      
+      y += 5;
+      doc.setFont('times', 'normal');
+      doc.text('Entrenador / Representante', marginX, y);
+      
+      if (identificacion) {
+        y += 5;
+        doc.text(`C.C. ${identificacion}`, marginX, y);
+      }
+      if (celular) {
+        y += 5;
+        doc.text(`Cel: ${celular}`, marginX, y);
+      }
+
+      // Elegant Footer
+      y = doc.internal.pageSize.getHeight() - 15;
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, doc.internal.pageSize.getHeight() - 25, pageWidth, 25, 'F');
+      doc.setFillColor(16, 185, 129);
+      doc.rect(0, doc.internal.pageSize.getHeight() - 28, pageWidth, 3, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text(escuelaNombre, pageWidth / 2, doc.internal.pageSize.getHeight() - 15, { align: 'center' });
+      doc.setFontSize(8);
+      doc.text('Documento Certificado electrónicamente por futGistro', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+
+      doc.save(`Paz_y_Salvo_${j.nombre.replace(/\s+/g, '_')}.pdf`);
+      
+      if (btn) btn.innerHTML = '<i class="bi bi-award"></i> Paz y Salvo';
+    }
+
+    async function eliminarJugador() {
+      if (!await confirmAction(`¿Eliminar a "${jugadorData?.nombre}"? Esta acción no se puede deshacer.`)) return;
+      try {
+        const data = await fetchAPI(`/jugadores/api/${jugadorId}`, { method: 'DELETE' });
+        if (data && data.success) {
+          showToast('Jugador eliminado');
+          setTimeout(() => window.location.href = '/jugadores/page', 1500);
+        }
+      } catch (e) {
+        showToast(e.message || 'Error al eliminar', 'error');
+      }
+    }
+
+    async function generarCarnet() {
+      if (!jugadorData) return;
+      const j = jugadorData;
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [86, 54] });
+
+      // Background
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 0, 86, 54, 'F');
+
+      // Green accent bar
+      doc.setFillColor(16, 185, 129);
+      doc.rect(0, 0, 86, 3, 'F');
+
+      // Title
+      doc.setFontSize(8);
+      doc.setTextColor(16, 185, 129);
+      doc.setFont('helvetica', 'bold');
+      doc.text('ESCUELA DE FÚTBOL', 43, 9, { align: 'center' });
+
+      // Player photo placeholder
+      doc.setFillColor(30, 41, 59);
+      doc.roundedRect(5, 14, 20, 24, 2, 2, 'F');
+      doc.setFontSize(14);
+      doc.setTextColor(255, 255, 255);
+      doc.text(j.nombre.charAt(0).toUpperCase(), 15, 28, { align: 'center' });
+
+      // Player info
+      doc.setFontSize(9);
+      doc.setTextColor(241, 245, 249);
+      doc.setFont('helvetica', 'bold');
+      const nombreTruncado = j.nombre.length > 25 ? j.nombre.substring(0, 25) + '...' : j.nombre;
+      doc.text(nombreTruncado, 30, 18);
+
+      doc.setFontSize(6);
+      doc.setTextColor(148, 163, 184);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Doc: ${j.documento}`, 30, 23);
+      doc.text(`Categoría: ${j.categoria ? j.categoria.nombre : 'N/A'}`, 30, 27);
+      doc.text(`Edad: ${j.edad || calcularEdad(j.fecha_nacimiento)} años`, 30, 31);
+      doc.text(`Sede: ${j.escuela ? j.escuela.nombre : 'N/A'}`, 30, 35);
+
+      // Bottom bar
+      doc.setFillColor(16, 185, 129);
+      doc.rect(0, 44, 86, 10, 'F');
+      doc.setFontSize(5);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Inscripción: ${j.fecha_registro || 'N/A'}`, 5, 49);
+      doc.text(`ID: ${j.id}`, 75, 49, { align: 'right' });
+
+      doc.save(`carnet_${j.nombre.replace(/\s+/g, '_')}.pdf`);
+      showToast('Carnet generado y descargado');
+    }
+
+    async function generarFichaTecnica() {
+      if (!jugadorData) return;
+
+      const btn = document.getElementById('btn-ficha');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<div class="spinner" style="width:14px;height:14px;border-width:2px;display:inline-block"></div> Generando...';
+      }
+
+      try {
+        const j = jugadorData;
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+        // Helpers para cargar imágenes
+        const loadImg = async (url) => {
+          if (!url) return null;
+          if (url.startsWith('data:image')) return url;
+          return new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'Anonymous';
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0);
+              resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = url;
+          });
+        };
+
+        const firmaBase64 = await loadImg(j.firma_padre);
+        const firmaEntrenadorBase64 = await loadImg(j.firma_entrenador);
+        const fotoBase64 = await loadImg(j.foto);
+        const logoEscuelaBase64 = j.escuela && j.escuela.logo ? await loadImg(j.escuela.logo) : null;
+        const margin = 15;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const rightMargin = pageWidth - 15;
+        const totalWidth = rightMargin - margin;
+        let y = 15;
+
+        // ====== ENCABEZADO ======
+        doc.setFillColor(15, 23, 42); // bg-slate-900
+        doc.rect(0, 0, pageWidth, 40, 'F');
+        
+        doc.setFillColor(16, 185, 129); // text-emerald-500
+        doc.rect(0, 40, pageWidth, 3, 'F');
+        
+        // FUTGISTRO / SYSTEM TITLE
+        doc.setTextColor(16, 185, 129);
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text('futGistro', margin, 20);
+        
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'normal');
+        doc.text('FICHA TÉCNICA DEL JUGADOR', margin, 28);
+        
+        // ESCUELA LOGO & NOMBRE
+        if (logoEscuelaBase64) {
+          doc.addImage(logoEscuelaBase64, 'PNG', rightMargin - 25, 5, 25, 25);
+        }
+        const escuelaNombre = j.escuela ? j.escuela.nombre.toUpperCase() : 'ESCUELA DE FÚTBOL';
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text(escuelaNombre, rightMargin, 35, { align: 'right' });
+
+        y = 55;
+
+        // ====== SECTION HELPER ======
+        const drawSection = (title, yPos) => {
+          doc.setFillColor(15, 23, 42); 
+          doc.rect(margin, yPos, totalWidth, 8, 'F');
+          doc.setTextColor(16, 185, 129); 
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'bold');
+          doc.text(title.toUpperCase(), margin + 5, yPos + 5.5);
+        };
+
+        // ====== FIELD HELPER ======
+        const drawF = (label, value, x, yPos, w) => {
+          doc.setFillColor(241, 245, 249);
+          doc.rect(x, yPos, w, 10, 'F');
+          doc.setDrawColor(203, 213, 225);
+          doc.setLineWidth(0.3);
+          doc.line(x, yPos + 10, x + w, yPos + 10);
+          
+          doc.setTextColor(15, 23, 42);
+          doc.setFontSize(6);
+          doc.setFont('helvetica', 'bold');
+          doc.text(label, x + 2, yPos + 4);
+
+          doc.setTextColor(50, 50, 50);
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'normal');
+          doc.text((value || '').toString().substring(0, 40), x + 2, yPos + 8.5);
+        };
+
+        let nombres = j.nombre;
+        let apellidos = '';
+        const nameParts = j.nombre.split(' ');
+        if (nameParts.length >= 3) {
+          nombres = nameParts.slice(0, 2).join(' ');
+          apellidos = nameParts.slice(2).join(' ');
+        }
+
+        // == SECTION 1: FOTO & DATOS DEL JUGADOR ==
+        drawSection('Datos Personales', y);
+        y += 12;
+
+        // Fotografía
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineDashPattern([1, 1], 0);
+        doc.rect(margin, y, 30, 38);
+        doc.setLineDashPattern([], 0);
+        if (fotoBase64) {
+          doc.addImage(fotoBase64, 'PNG', margin + 1, y + 1, 28, 36);
+        } else {
+          doc.setTextColor(148, 163, 184);
+          doc.setFontSize(9);
+          doc.text('Sin Foto', margin + 15, y + 20, { align: 'center' });
+        }
+
+        const fieldX = margin + 35;
+        const fieldW = totalWidth - 35;
+
+        drawF('NOMBRES', nombres, fieldX, y, fieldW);
+        y += 14;
+        drawF('APELLIDOS', apellidos, fieldX, y, fieldW);
+        y += 14;
+        
+        drawF('DOCUMENTO / DNI', j.documento, fieldX, y, (fieldW/2) - 2);
+        drawF('FECHA NACIMIENTO', formatDate(j.fecha_nacimiento), fieldX + (fieldW/2) + 2, y, (fieldW/2) - 2);
+        y += 16;
+
+        drawF('LUGAR DE NACIMIENTO', j.lugar_nacimiento || 'N/A', margin, y, 65);
+        drawF('ESTATURA', j.estatura || 'N/A', margin + 70, y, 30);
+        drawF('PESO', j.peso || 'N/A', margin + 105, y, 30);
+        drawF('TIPO SANGRE / RH', (j.tipo_sangre || '') + ' ' + (j.rh || ''), margin + 140, y, 40);
+        y += 14;
+
+        drawF('EPS / SEGURO MÉDICO', j.eps || 'N/A', margin, y, 90);
+        drawF('CATEGORÍA', j.categoria ? j.categoria.nombre : 'N/A', margin + 95, y, 85);
+        y += 18;
+
+        // == SECTION 2: DATOS FAMILIARES E IDENTIFICACIÓN ==
+        drawSection('Datos Familiares y Acudiente', y);
+        y += 12;
+
+        drawF('NOMBRE DEL PADRE', j.nombre_padre || 'N/A', margin, y, 110);
+        drawF('NÚMERO DE CÉDULA (PADRE)', j.cc_padre || 'N/A', margin + 115, y, 65);
+        y += 14;
+
+        drawF('NOMBRE DE LA MADRE', j.nombre_madre || 'N/A', margin, y, 110);
+        drawF('NÚMERO DE CÉDULA (MADRE)', j.cc_madre || 'N/A', margin + 115, y, 65);
+        y += 18;
+
+        // == SECTION 3: CONTACTO DE EMERGENCIA ==
+        drawSection('Datos de Residencia y Contacto', y);
+        y += 12;
+
+        drawF('CIUDAD / MUNICIPIO', j.ciudad || 'N/A', margin, y, 70);
+        drawF('DIRECCIÓN DOMICILIO', j.direccion || 'N/A', margin + 75, y, 105);
+        y += 14;
+
+        drawF('TELÉFONO CELULAR 1', j.numero_fijo || 'N/A', margin, y, 90);
+        drawF('TELÉFONO CELULAR PADRE/MADRE', j.telefono_padre || j.telefono || 'N/A', margin + 95, y, 85);
+        y += 24;
+
+        // == FIRMAS ==
+        const firmY = y + 15;
+        doc.setDrawColor(15, 23, 42); 
+        doc.setLineWidth(0.5);
+        
+        // Firma Padre
+        doc.line(margin + 5, firmY, margin + 65, firmY);
+        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.text('FIRMA PADRE, MADRE O TUTOR', margin + 35, firmY + 5, { align: 'center' });
+        if (firmaBase64) doc.addImage(firmaBase64, 'PNG', margin + 10, firmY - 20, 50, 18);
+
+        // Firma Entrenador
+        doc.line(margin + 115, firmY, margin + 175, firmY);
+        doc.text('FIRMA ENTRENADOR / RECIBIDO POR', margin + 145, firmY + 5, { align: 'center' });
+        if (firmaEntrenadorBase64) doc.addImage(firmaEntrenadorBase64, 'PNG', margin + 120, firmY - 20, 50, 18);
+
+        // == FOOTER TEXT ==
+        const finalY = doc.internal.pageSize.getHeight() - 10;
+        doc.setTextColor(148, 163, 184);
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Generado vía futGistro © | ${escuelaNombre}`, pageWidth / 2, finalY, { align: 'center' });
+        doc.text('Documento Electrónico Generado Automáticamente', rightMargin, finalY, { align: 'right' });
+
+        doc.save(`Ficha_${j.nombre.replace(/\s+/g, '_')}.pdf`);
+        showToast('Ficha técnica generada y descargada');
+      } catch (err) {
+        console.error(err);
+        showToast('Error al generar la ficha: ' + err.message, 'error');
+      } finally {
+        const btn = document.getElementById('btn-ficha');
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-file-earmark-pdf-fill"></i> Descargar Ficha';
+        }
+      }
+    }
+  </script>
+</body>
+
+</html>

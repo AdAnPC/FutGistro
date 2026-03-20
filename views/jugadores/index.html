@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Lista de jugadores de la escuela de fútbol">
+  <title>Jugadores | futGistro</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#10b981">
+  <link rel="apple-touch-icon" href="/icons/logo.png">
+</head>
+
+<body>
+  <div class="app-layout" id="appLayout"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    let currentPage = 1;
+    let totalPages = 1;
+    let searchTimeout;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      buildPage();
+    });
+
+    async function buildPage() {
+      const user = await loadUserInfo();
+      const layout = document.getElementById('appLayout');
+      layout.innerHTML = `
+        ${renderSidebar(user.nombre, user.rol)}
+        <main class="main-content">
+          <div class="top-bar">
+            <div>
+              <button class="menu-toggle" id="menuToggle"><i class="bi bi-list"></i></button>
+            </div>
+            <div>
+              <h4>Jugadores</h4>
+              <div class="breadcrumb">Gestión de jugadores registrados</div>
+            </div>
+            <div>
+              <a href="/jugadores/nuevo" class="btn-primary-custom" id="btn-new-player">
+                <i class="bi bi-person-plus-fill"></i> Nuevo Jugador
+              </a>
+            </div>
+          </div>
+          <div class="content-area">
+            <!-- Filters -->
+            <div class="data-card mb-4 fade-in">
+              <div class="data-card-body">
+                <div class="row g-3 align-items-end">
+                  <div class="col-md-5">
+                    <label class="form-label-custom">Buscar jugador</label>
+                    <div class="search-bar">
+                      <i class="bi bi-search"></i>
+                      <input type="text" id="searchInput" class="form-control-custom" placeholder="Buscar por nombre..." oninput="handleSearch(this.value)">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label-custom">Filtrar por categoría</label>
+                    <select id="categoriaFilter" class="form-select-custom" onchange="loadJugadores()">
+                      <option value="">Todas las categorías</option>
+                    </select>
+                  </div>
+                  <div class="col-md-3">
+                    <button onclick="clearFilters()" class="btn-secondary-custom w-100 justify-content-center" id="btn-clear-filters">
+                      <i class="bi bi-x-circle"></i> Limpiar filtros
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Players Table -->
+            <div class="data-card fade-in">
+              <div class="data-card-header">
+                <h5><i class="bi bi-people-fill me-2" style="color:var(--primary)"></i> Lista de Jugadores</h5>
+                <span class="badge-custom gray" id="totalBadge">0 jugadores</span>
+              </div>
+              <div style="overflow-x:auto">
+                <table class="table-custom">
+                  <thead>
+                    <tr>
+                      <th>Jugador</th>
+                      <th>Documento</th>
+                      <th>Edad</th>
+                      <th>Categoría</th>
+                      <th>Padre/Acudiente</th>
+                      <th>Teléfono</th>
+                      <th>Estado Pago</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="jugadoresBody">
+                    <tr><td colspan="7" class="text-center" style="padding:40px;color:var(--text-muted)">Cargando...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="pagination-custom" id="pagination"></div>
+            </div>
+          </div>
+        </main>
+      `;
+
+      initSidebar();
+      document.getElementById('nav-jugadores')?.classList.add('active');
+      await loadCategorias();
+      await loadJugadores();
+    }
+
+    async function loadCategorias() {
+      try {
+        const data = await fetchAPI('/categorias');
+        if (data && data.success) {
+          const select = document.getElementById('categoriaFilter');
+          data.data.forEach(cat => {
+            const opt = document.createElement('option');
+            opt.value = cat.id;
+            opt.textContent = cat.nombre;
+            select.appendChild(opt);
+          });
+        }
+      } catch (e) { console.error(e); }
+    }
+
+    function handleSearch(value) {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        currentPage = 1;
+        loadJugadores();
+      }, 300);
+    }
+
+    function clearFilters() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('categoriaFilter').value = '';
+      currentPage = 1;
+      loadJugadores();
+    }
+
+    async function loadJugadores() {
+      const search = document.getElementById('searchInput')?.value || '';
+      const categoriaId = document.getElementById('categoriaFilter')?.value || '';
+
+      let url = `/jugadores/api?page=${currentPage}&limit=15`;
+      if (search) url += `&search=${encodeURIComponent(search)}`;
+      if (categoriaId) url += `&categoria_id=${categoriaId}`;
+
+      try {
+        const data = await fetchAPI(url);
+        if (data && data.success) {
+          renderJugadores(data.data);
+          totalPages = data.paginas || 1;
+          document.getElementById('totalBadge').textContent = `${data.total} jugadores`;
+          renderPagination();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function renderJugadores(jugadores) {
+      const tbody = document.getElementById('jugadoresBody');
+      if (!jugadores || jugadores.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">
+          <i class="bi bi-people"></i><h5>No se encontraron jugadores</h5>
+          <p>Intenta con otros filtros o registra un nuevo jugador</p>
+          <a href="/jugadores/nuevo" class="btn-primary-custom mt-3"><i class="bi bi-person-plus"></i> Nuevo Jugador</a>
+        </div></td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = jugadores.map(j => `
+        <tr class="fade-in" style="cursor: pointer; transition: background-color 0.2s;" onclick="if(!event.target.closest('a') && !event.target.closest('button')) window.location.href='/jugadores/ficha/${j.id}'" onmouseover="this.style.backgroundColor='rgba(16, 185, 129, 0.05)'" onmouseout="this.style.backgroundColor=''" title="Ver ficha del jugador">
+          <td data-label="Jugador">
+            <div style="display:flex;align-items:center;gap:10px">
+              ${j.foto
+          ? `<img src="${j.foto}" class="player-avatar" alt="${escapeHtml(j.nombre)}">`
+          : `<div class="player-avatar-placeholder">${j.nombre.charAt(0).toUpperCase()}</div>`
+        }
+              <div>
+                <div style="font-weight:600">${escapeHtml(j.nombre)}</div>
+                <div style="font-size:11px;color:var(--text-muted)">${j.escuela ? escapeHtml(j.escuela.nombre) : ''}</div>
+              </div>
+            </div>
+          </td>
+          <td data-label="Documento" style="font-family:monospace;font-size:12px">${escapeHtml(j.documento)}</td>
+          <td data-label="Edad"><span class="badge-custom cyan">${j.edad || calcularEdad(j.fecha_nacimiento)} años</span></td>
+          <td data-label="Categoría"><span class="badge-custom green">${j.categoria ? escapeHtml(j.categoria.nombre) : 'Sin categoría'}</span></td>
+          <td data-label="Acudiente">${escapeHtml(j.nombre_padre)}</td>
+          <td data-label="Teléfono">${escapeHtml(j.telefono_padre || j.telefono || 'N/A')}</td>
+          <td data-label="Estado Pago">
+            ${j.pagos && j.pagos.length > 0
+          ? (j.pagos[0].estado === 'pagado'
+            ? `<span class="badge-custom green" style="font-size:6px;"><i class="bi bi-check-circle"></i> Pagado</span>`
+            : `<span class="badge-custom" style="background-color:var(--danger);color:white;font-size:6px;"><i class="bi bi-clock"></i> Pendiente</span>`)
+          : `<span class="badge-custom gray" style="font-size:6px;" title="Generando registro...">Procesando</span>`
+        }
+          </td>
+          <td data-label="Acciones">
+            <div style="display:flex;gap:4px;transform:translateY(-25px);">
+              ${j.pagos && j.pagos.length > 0 && j.pagos[0].estado === 'pendiente'
+          ? `<button class="btn-icon" style="color:var(--success)" title="Registrar Pago" onclick="event.stopPropagation(); registrarPago(${j.pagos[0].id})"><i class="bi bi-currency-dollar"></i></button>`
+          : ''}
+              <a href="/jugadores/editar/${j.id}" class="btn-icon edit" title="Editar"><i class="bi bi-pencil"></i></a>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function renderPagination() {
+      const container = document.getElementById('pagination');
+      if (totalPages <= 1) { container.innerHTML = ''; return; }
+
+      let html = `<button ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})"><i class="bi bi-chevron-left"></i></button>`;
+      for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+          html += `<button class="${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+        } else if (i === currentPage - 3 || i === currentPage + 3) {
+          html += `<button disabled>...</button>`;
+        }
+      }
+      html += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})"><i class="bi bi-chevron-right"></i></button>`;
+      container.innerHTML = html;
+    }
+
+    function goToPage(page) {
+      currentPage = page;
+      loadJugadores();
+    }
+
+    async function eliminarJugador(id, nombre) {
+      if (!await confirmAction(`¿Estás seguro de eliminar al jugador "${nombre}"? Esta acción no se puede deshacer.`)) return;
+
+      try {
+        const data = await fetchAPI(`/jugadores/api/${id}`, { method: 'DELETE' });
+        if (data && data.success) {
+          showToast('Jugador eliminado exitosamente');
+          loadJugadores();
+        }
+      } catch (e) {
+        showToast(e.message || 'Error al eliminar', 'error');
+      }
+    }
+
+    async function registrarPago(pagoId) {
+      if (!await confirmAction(`¿Deseas registrar el pago de este mes para el jugador?`)) return;
+
+      try {
+        const data = await fetchAPI(`/pagos/api/${pagoId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ estado: 'pagado', fecha_pago: new Date().toISOString().split('T')[0] }),
+          headers: { 'Content-Type': 'application/json' }
+        });
+        if (data && data.success) {
+          showToast('Pago registrado exitosamente');
+          loadJugadores();
+        }
+      } catch (e) {
+        showToast(e.message || 'Error al registrar pago', 'error');
+      }
+    }
+
+    async function generarPlantillaEnBlanco() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      // ====== HEADER (App Style) ======
+      doc.setFillColor(15, 23, 42); // bg-slate-900
+      doc.rect(0, 0, pageWidth, 40, 'F');
+
+      doc.setFillColor(16, 185, 129); // text-emerald-500
+      doc.rect(0, 40, pageWidth, 3, 'F');
+
+      doc.setTextColor(16, 185, 129);
+      doc.setFontSize(22);
+      doc.setFont('helvetica', 'bold');
+      doc.text('futGistro', 15, 20);
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'normal');
+      doc.text('FORMATO DE INSCRIPCIÓN', 15, 28);
+
+      const escuelaNombre = window.__USER__ && window.__USER__.escuela_nombre ? window.__USER__.escuela_nombre.toUpperCase() : 'ESCUELA DE FÚTBOL';
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text(escuelaNombre, pageWidth - 15, 26, { align: 'right' });
+
+      let y = 55;
+      const margin = 15;
+      const rightMargin = pageWidth - 15;
+      const totalWidth = rightMargin - margin;
+
+      // ====== SECTION HELPER ======
+      const drawSection = (title, yPos) => {
+        doc.setFillColor(15, 23, 42); // dark blue
+        doc.rect(margin, yPos, totalWidth, 8, 'F');
+        doc.setTextColor(16, 185, 129); // green
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text(title.toUpperCase(), margin + 5, yPos + 5.5);
+      };
+
+      // ====== FIELD HELPER ======
+      const drawField = (label, x, yPos, w) => {
+        // Label background
+        doc.setFillColor(241, 245, 249); // slate-100
+        doc.rect(x, yPos, w, 10, 'F');
+        // Label shadow/border to give it depth
+        doc.setDrawColor(203, 213, 225); // slate-300
+        doc.setLineWidth(0.3);
+        doc.line(x, yPos + 10, x + w, yPos + 10);
+
+        doc.setTextColor(15, 23, 42); // slate-900
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'bold');
+        doc.text(label, x + 2, yPos + 4);
+      };
+
+      // == SECTION 1: FOTO & DATOS DEL JUGADOR ==
+      drawSection('Datos Personales', y);
+      y += 12;
+
+      // Photo block
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(203, 213, 225); // slate-300
+      doc.setLineDashPattern([1, 1], 0);
+      doc.rect(margin, y, 30, 38);
+      doc.setTextColor(148, 163, 184);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Pegar Foto', margin + 15, y + 20, { align: 'center' });
+      doc.setLineDashPattern([], 0);
+
+      const fieldX = margin + 35;
+      const fieldW = totalWidth - 35;
+
+      drawField('NOMBRES', fieldX, y, fieldW);
+      y += 14;
+      drawField('APELLIDOS', fieldX, y, fieldW);
+      y += 14;
+
+      drawField('DOCUMENTO / DNI', fieldX, y, (fieldW / 2) - 2);
+      drawField('FECHA NACIMIENTO', fieldX + (fieldW / 2) + 2, y, (fieldW / 2) - 2);
+      y += 16;
+
+      drawField('LUGAR DE NACIMIENTO', margin, y, 65);
+      drawField('ESTATURA', margin + 70, y, 30);
+      drawField('PESO', margin + 105, y, 30);
+      drawField('TIPO DE SANGRE / RH', margin + 140, y, 40);
+      y += 14;
+
+      drawField('EPS / SEGURO MÉDICO', margin, y, 80);
+      drawField('BARRIO', margin + 85, y, 45);
+      drawField('DIRECCIÓN', margin + 135, y, 45);
+      y += 18;
+
+      // == SECTION 2: DATOS EDUCATIVOS Y CONTACTO ==
+      drawSection('Información Académica y Contacto', y);
+      y += 12;
+
+      drawField('INSTITUCIÓN EDUCATIVA', margin, y, 110);
+      drawField('GRADO / NIVEL', margin + 115, y, 65);
+      y += 14;
+
+      drawField('NÚMERO DE TELÉFONO / CELULAR JUGADOR', margin, y, 85);
+      drawField('REDES SOCIALES (INSTAGRAM/FACEBOOK)', margin + 90, y, 90);
+      y += 18;
+
+      // == SECTION 3: DATOS FAMILIARES ==
+      drawSection('Información Familiar / Acudiente', y);
+      y += 12;
+
+      drawField('NOMBRE COMPLETO MADRE O PADRE', margin, y, 110);
+      drawField('OCUPACIÓN / PROFESIÓN', margin + 115, y, 65);
+      y += 14;
+
+      drawField('CORREO ELECTRÓNICO ACUDIENTE', margin, y, 110);
+      drawField('NÚMERO DE TELÉFONO ACUDIENTE', margin + 115, y, 65);
+      y += 20;
+
+      // == DISCLAIMER ==
+      doc.setFillColor(241, 245, 249);
+      doc.rect(margin, y, totalWidth, 15, 'F');
+      doc.setTextColor(100, 116, 139);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Reconozco que los datos aquí suministrados son reales y autorizo el tratamiento de datos personales de acuerdo a las ', margin + 5, y + 6);
+      doc.text('leyes vigentes de regulación en escuelas deportivas. Al firmar esta inscripción nos comprometemos con los reglamentos internos.', margin + 5, y + 10);
+      y += 28;
+
+      // == FIRMAS ==
+      doc.setDrawColor(15, 23, 42); // slate-900
+      doc.setLineWidth(0.5);
+      doc.line(margin + 10, y, margin + 70, y);
+      doc.line(margin + 110, y, margin + 170, y);
+
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Firma Apoderado / Acudiente', margin + 40, y + 5, { align: 'center' });
+      doc.text('Firma Recibido por / Entrenador', margin + 140, y + 5, { align: 'center' });
+
+      // Footer text
+      const date = new Date();
+      doc.setTextColor(148, 163, 184);
+      doc.setFontSize(7);
+      doc.text(`Generado vía futGistro © ${date.getFullYear()} | Formato de uso interno`, pageWidth / 2, 285, { align: 'center' });
+
+      doc.save('Plantilla_FutGistro.pdf');
+    }
+  </script>
+</body>
+
+</html>
