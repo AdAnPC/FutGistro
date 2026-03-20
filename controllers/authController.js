@@ -51,7 +51,7 @@ const authController = {
                     escuela_nombre: usuario.escuela ? usuario.escuela.nombre : null,
                     escuela_logo: usuario.escuela ? usuario.escuela.logo : null
                 },
-                process.env.JWT_SECRET,
+                process.env.JWT_SECRET || 'fallback_secret_for_emergency_only',
                 { expiresIn: '8h' }
             );
 
@@ -277,7 +277,7 @@ const authController = {
                     escuela_id: escuela.id,
                     escuela_nombre: escuela.nombre
                 },
-                process.env.JWT_SECRET,
+                process.env.JWT_SECRET || 'fallback_secret_for_emergency_only',
                 { expiresIn: '8h' }
             );
 

@@ -12,7 +12,7 @@ const authMiddleware = (req, res, next) => {
             return res.redirect('/auth/login');
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret_for_emergency_only');
         if (decoded.escuela_id) decoded.escuela_id = parseInt(decoded.escuela_id, 10);
         req.user = decoded;
         res.locals.user = decoded;
@@ -65,7 +65,7 @@ const isGuest = (req, res, next) => {
     const token = req.session?.token;
     if (token) {
         try {
-            jwt.verify(token, process.env.JWT_SECRET);
+            jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret_for_emergency_only');
             return res.redirect('/dashboard');
         } catch (e) {
             // Token invalid, continue
