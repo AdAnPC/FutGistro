@@ -92,11 +92,11 @@ const escuelaController = {
             if (!escuela) return res.status(404).json({ success: false, message: 'Escuela no encontrada' });
 
             const { telefono, email } = req.body;
-            let dataToUpdate = { 
-                telefono: telefono || null, 
-                email: email ? email : null 
+            let dataToUpdate = {
+                telefono: telefono || null,
+                email: email ? email : null
             };
-            
+
             // Si el body trae nombre y estamos restringiendo el nombre a que el superadmin lo cambie
             // podemos agregarlo o ignorarlo.
             if (req.body.nombre !== undefined) dataToUpdate.nombre = req.body.nombre;
@@ -131,13 +131,13 @@ const escuelaController = {
                 });
             }
 
-            const dataToCreate = { 
-                nombre, 
-                direccion: direccion || null, 
-                telefono: telefono || null, 
-                director: director || null, 
-                email: email ? email : null, 
-                precio_mensualidad: precio_mensualidad || 0 
+            const dataToCreate = {
+                nombre,
+                direccion: direccion || null,
+                telefono: telefono || null,
+                director: director || null,
+                email: email ? email : null,
+                precio_mensualidad: precio_mensualidad || 0
             };
             if (req.file) dataToCreate.logo = '/uploads/logos/' + req.file.filename;
 
@@ -165,14 +165,14 @@ const escuelaController = {
                 return res.status(404).json({ success: false, message: 'Escuela no encontrada' });
             }
 
-            let dataToUpdate = { 
-                nombre, 
-                direccion: direccion || null, 
-                telefono: telefono || null, 
-                director: director || null, 
-                email: email ? email : null, 
-                activa, 
-                precio_mensualidad: precio_mensualidad || 0 
+            let dataToUpdate = {
+                nombre,
+                direccion: direccion || null,
+                telefono: telefono || null,
+                director: director || null,
+                email: email ? email : null,
+                activa,
+                precio_mensualidad: precio_mensualidad || 0
             };
             if (req.file) {
                 eliminarArchivo(escuela.logo);
