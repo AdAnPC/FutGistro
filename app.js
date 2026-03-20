@@ -7,17 +7,46 @@ const { sequelize } = require('./models');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression');
+const morgan = require('morgan');
+const MySQLStore = require('express-mysql-session')(session);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '0.0.0.0'; // Escuchar en todas las interfaces de red
+const HOST = process.env.HOST || '0.0.0.0';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
-// Obtener IP local de la red
+// Session Storage Configuration (Supports Redis or MySQL)
+let sessionStore;
+if (process.env.REDIS_URL) {
+    // REDIS Setup
+    const { RedisStore } = require('connect-redis');
+    const { createClient } = require('redis');
+    const redisClient = createClient({ url: process.env.REDIS_URL });
+    redisClient.connect().catch(err => console.error('❌ Error conectando a Redis:', err));
+    sessionStore = new RedisStore({ client: redisClient, prefix: "futgistro:" });
+    console.log('✅ Usando Redis para almacenamiento de sesiones');
+} else {
+    // MYSQL Setup (Default)
+    const MySQLStore = require('express-mysql-session')(session);
+    sessionStore = new MySQLStore({
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME,
+        clearExpired: true,
+        checkExpirationInterval: 900000,
+        expiration: 86400000
+    });
+    console.log('✅ Usando MySQL para almacenamiento de sesiones');
+}
+
+// Obtener IP local de la red (para logs de inicio)
 function getLocalIP() {
     const interfaces = os.networkInterfaces();
     for (const name of Object.keys(interfaces)) {
         for (const iface of interfaces[name]) {
-            // Buscar IPv4 que no sea loopback
             if (iface.family === 'IPv4' && !iface.internal) {
                 return iface.address;
             }
@@ -26,23 +55,32 @@ function getLocalIP() {
     return 'localhost';
 }
 
+// Production Middlewares
+app.use(compression()); // Compress responses
+app.use(morgan(IS_PRODUCTION ? 'combined' : 'dev')); // Better logging
+
 // Security Middlewares
-app.use(helmet({ contentSecurityPolicy: false })); // Helps secure your apps by setting various HTTP headers
-app.use(cors()); // Enable CORS
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors());
 app.disable('x-powered-by');
+
+// Trust proxy for secure cookies (Needed for hostings like Railway/Render)
+if (IS_PRODUCTION) {
+    app.set('trust proxy', 1);
+}
 
 // Limiter to prevent brute force
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000, // Limit each IP to 1000 requests per `window` (here, per 15 minutes)
+    windowMs: 15 * 60 * 1000,
+    max: 1000,
     standardHeaders: true,
     legacyHeaders: false,
     message: 'Demasiadas solicitudes desde esta IP, por favor intente de nuevo más tarde.'
 });
 
 const authLimiter = rateLimit({
-    windowMs: 60 * 60 * 1000, // 1 hour
-    max: 50, // Limit each IP to 50 login requests per `window`
+    windowMs: 60 * 60 * 1000,
+    max: 50,
     message: 'Demasiados intentos de acceso desde esta IP, por favor intente de nuevo en una hora.'
 });
 
@@ -53,15 +91,18 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Session
+// Session with Store
 app.use(session({
+    key: 'futgistro_session',
     secret: process.env.SESSION_SECRET || 'default_secret',
+    store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
-        maxAge: 8 * 60 * 60 * 1000, // 8 hours
+        maxAge: 8 * 60 * 60 * 1000,
         httpOnly: true,
-        sameSite: 'lax'
+        sameSite: 'lax',
+        secure: IS_PRODUCTION // Use secure cookies only in production (HTTPS)
     }
 }));
 
@@ -126,8 +167,13 @@ async function startServer() {
         await sequelize.authenticate();
         console.log('✅ Conexión a MySQL establecida correctamente');
 
-        await sequelize.sync({ alter: true });
-        console.log('✅ Modelos sincronizados con la base de datos');
+        // Sync models (Only use alter in development to avoid production data risk)
+        if (!IS_PRODUCTION) {
+            await sequelize.sync({ alter: true });
+            console.log('✅ Modelos sincronizados con la base de datos (Development)');
+        } else {
+            console.log('✅ Saltando sincronización de modelos (Production Mode)');
+        }
 
         const localIP = getLocalIP();
 
