@@ -446,17 +446,29 @@
           document.getElementById('nombre_padre').value = j.nombre_padre || '';
           document.getElementById('telefono_padre').value = j.telefono_padre || '';
 
-          if (j.departamento_nacimiento) {
-             document.getElementById('departamento_nacimiento').value = j.departamento_nacimiento;
-             poblarCiudades(j.departamento_nacimiento, 'lugar_nacimiento');
+          let deptoNac = j.departamento_nacimiento;
+          let ciudadNac = j.lugar_nacimiento;
+          if (!deptoNac && ciudadNac) deptoNac = findDepartamentoByCiudad(ciudadNac);
+          if (deptoNac) {
+             document.getElementById('departamento_nacimiento').value = deptoNac;
+             poblarCiudades(deptoNac, 'lugar_nacimiento');
           }
-          document.getElementById('lugar_nacimiento').value = j.lugar_nacimiento || '';
+          if (ciudadNac && !Array.from(document.getElementById('lugar_nacimiento').options).some(o => o.value === ciudadNac)) {
+             document.getElementById('lugar_nacimiento').innerHTML += `<option value="${ciudadNac}">${ciudadNac}</option>`;
+          }
+          document.getElementById('lugar_nacimiento').value = ciudadNac || '';
 
-          if (j.departamento_residencia) {
-             document.getElementById('departamento_residencia').value = j.departamento_residencia;
-             poblarCiudades(j.departamento_residencia, 'ciudad');
+          let deptoRes = j.departamento_residencia;
+          let ciudadRes = j.ciudad;
+          if (!deptoRes && ciudadRes) deptoRes = findDepartamentoByCiudad(ciudadRes);
+          if (deptoRes) {
+             document.getElementById('departamento_residencia').value = deptoRes;
+             poblarCiudades(deptoRes, 'ciudad');
           }
-          document.getElementById('ciudad').value = j.ciudad || '';
+          if (ciudadRes && !Array.from(document.getElementById('ciudad').options).some(o => o.value === ciudadRes)) {
+             document.getElementById('ciudad').innerHTML += `<option value="${ciudadRes}">${ciudadRes}</option>`;
+          }
+          document.getElementById('ciudad').value = ciudadRes || '';
 
           document.getElementById('estatura').value = j.estatura || '';
           document.getElementById('peso').value = j.peso || '';

@@ -55,3 +55,17 @@ function poblarCiudades(deptoElegido, selectCiudadId) {
         });
     }
 }
+
+function findDepartamentoByCiudad(ciudadBuscada) {
+    if (!ciudadBuscada) return "";
+    // Buscar coincidencia exacta
+    for (const [depto, ciudades] of Object.entries(colombiaData)) {
+        if (ciudades.includes(ciudadBuscada)) return depto;
+    }
+    // Buscar coincidencia parcial si era ingresado manualmente
+    const lowerCiud = ciudadBuscada.toLowerCase();
+    for (const [depto, ciudades] of Object.entries(colombiaData)) {
+        if (ciudades.some(c => lowerCiud.includes(c.toLowerCase()) || c.toLowerCase().includes(lowerCiud))) return depto;
+    }
+    return "";
+}
