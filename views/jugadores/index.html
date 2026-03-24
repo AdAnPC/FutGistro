@@ -250,7 +250,7 @@
     }
 
     async function registrarPago(pagoId) {
-      if (!await confirmAction(`¿Deseas registrar el pago de este mes para el jugador?`)) return;
+      if (!await confirmAction(`¿Deseas registrar el pago de este mes para el jugador?`, 'Sí, pagar', 'btn-success-custom', 'bi-cash-coin', 'var(--success)')) return;
 
       try {
         const data = await fetchAPI(`/pagos/api/${pagoId}`, {

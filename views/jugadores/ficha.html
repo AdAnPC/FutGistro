@@ -161,7 +161,7 @@
               </div>
               <div class="ficha-detail-item">
                 <label>Lugar de Nacimiento</label>
-                <span>${escapeHtml(j.lugar_nacimiento || 'No registrado')}</span>
+                <span>${escapeHtml(j.lugar_nacimiento ? j.lugar_nacimiento + (j.departamento_nacimiento ? ', ' + j.departamento_nacimiento : '') : 'No registrado')}</span>
               </div>
               <div class="ficha-detail-item">
                 <label>Estatura / Peso</label>
@@ -180,8 +180,8 @@
                 <span>${escapeHtml(j.eps || 'No registrada')}</span>
               </div>
               <div class="ficha-detail-item">
-                <label>Ciudad / Vereda</label>
-                <span>${escapeHtml(j.ciudad || 'No registrada')}</span>
+                <label>Lugar de Residencia</label>
+                <span>${escapeHtml(j.ciudad ? j.ciudad + (j.departamento_residencia ? ', ' + j.departamento_residencia : '') : 'No registrada')}</span>
               </div>
               <div class="ficha-detail-item">
                 <label>Dirección</label>

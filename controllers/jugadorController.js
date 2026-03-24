@@ -162,6 +162,27 @@ const jugadorController = {
         }
     },
 
+    // POST /api/upload-temp
+    // Handles background file uploads
+    uploadTemp: async (req, res) => {
+        try {
+            if (!req.files || req.files.length === 0) {
+                return res.status(400).json({ success: false, message: 'No se subió ningún archivo' });
+            }
+            const file = req.files[0];
+            let folder = 'documentos';
+            if (file.fieldname === 'foto') folder = 'fotos';
+            else if (file.fieldname === 'logo') folder = 'logos';
+            else if (file.fieldname === 'firma_padre' || file.fieldname === 'firma_entrenador') folder = 'firmas';
+
+            const filePath = `/uploads/${folder}/${file.filename}`;
+            res.json({ success: true, url: filePath, fieldname: file.fieldname });
+        } catch (error) {
+            console.error('Error subiendo archivo temporal:', error);
+            res.status(500).json({ success: false, message: 'Error en el servidor al subir archivo' });
+        }
+    },
+
     // POST /api/jugadores
     crear: async (req, res) => {
         try {
@@ -172,7 +193,16 @@ const jugadorController = {
                 jugadorData.escuela_id = req.user.escuela_id;
             }
 
-            // Handle uploaded files (max 5)
+            // Handle uploaded files metadata (temp urls)
+            if (req.body.foto_url) jugadorData.foto = req.body.foto_url;
+            if (req.body.registro_civil_url) jugadorData.registro_civil = req.body.registro_civil_url;
+            if (req.body.documento_acudiente_url) jugadorData.documento_acudiente = req.body.documento_acudiente_url;
+            if (req.body.documento_extra1_url) jugadorData.documento_extra1 = req.body.documento_extra1_url;
+            if (req.body.documento_extra2_url) jugadorData.documento_extra2 = req.body.documento_extra2_url;
+            if (req.body.documento_extra3_url) jugadorData.documento_extra3 = req.body.documento_extra3_url;
+            if (req.body.documento_extra4_url) jugadorData.documento_extra4 = req.body.documento_extra4_url;
+
+            // Handle uploaded files (max 5) - direct upload alternative
             if (req.files) {
                 if (req.files.foto) jugadorData.foto = '/uploads/fotos/' + req.files.foto[0].filename;
                 if (req.files.registro_civil) jugadorData.registro_civil = '/uploads/documentos/' + req.files.registro_civil[0].filename;
@@ -255,7 +285,37 @@ const jugadorController = {
                 delete jugadorData.escuela_id;
             }
 
-            // Handle uploaded files (max 5)
+            // Handle background uploads URLs
+            if (req.body.foto_url && req.body.foto_url !== jugador.foto) {
+                eliminarArchivo(jugador.foto);
+                jugadorData.foto = req.body.foto_url;
+            }
+            if (req.body.registro_civil_url && req.body.registro_civil_url !== jugador.registro_civil) {
+                eliminarArchivo(jugador.registro_civil);
+                jugadorData.registro_civil = req.body.registro_civil_url;
+            }
+            if (req.body.documento_acudiente_url && req.body.documento_acudiente_url !== jugador.documento_acudiente) {
+                eliminarArchivo(jugador.documento_acudiente);
+                jugadorData.documento_acudiente = req.body.documento_acudiente_url;
+            }
+            if (req.body.documento_extra1_url && req.body.documento_extra1_url !== jugador.documento_extra1) {
+                eliminarArchivo(jugador.documento_extra1);
+                jugadorData.documento_extra1 = req.body.documento_extra1_url;
+            }
+            if (req.body.documento_extra2_url && req.body.documento_extra2_url !== jugador.documento_extra2) {
+                eliminarArchivo(jugador.documento_extra2);
+                jugadorData.documento_extra2 = req.body.documento_extra2_url;
+            }
+            if (req.body.documento_extra3_url && req.body.documento_extra3_url !== jugador.documento_extra3) {
+                eliminarArchivo(jugador.documento_extra3);
+                jugadorData.documento_extra3 = req.body.documento_extra3_url;
+            }
+            if (req.body.documento_extra4_url && req.body.documento_extra4_url !== jugador.documento_extra4) {
+                eliminarArchivo(jugador.documento_extra4);
+                jugadorData.documento_extra4 = req.body.documento_extra4_url;
+            }
+
+            // Handle uploaded files (max 5) - direct upload alternative
             if (req.files) {
                 if (req.files.foto) {
                     eliminarArchivo(jugador.foto);

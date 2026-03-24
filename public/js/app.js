@@ -85,7 +85,7 @@ function hideLoading() {
 }
 
 // ============ CONFIRM DIALOG ============
-function confirmAction(message) {
+function confirmAction(message, confirmText = 'Sí, eliminar', confirmClass = 'btn-danger-custom', iconClass = 'bi-exclamation-triangle-fill', iconColor = 'var(--danger)') {
     return new Promise((resolve) => {
         const overlay = document.createElement('div');
         Object.assign(overlay.style, {
@@ -104,14 +104,14 @@ function confirmAction(message) {
         });
 
         modal.innerHTML = `
-            <div style="font-size: 40px; color: var(--danger); margin-bottom: 12px;">
-                <i class="bi bi-exclamation-triangle-fill"></i>
+            <div style="font-size: 40px; color: ${iconColor}; margin-bottom: 12px;">
+                <i class="bi ${iconClass}"></i>
             </div>
             <h4 style="margin-bottom: 16px; font-weight: 700;">Confirmar Acción</h4>
             <p style="color: var(--text-secondary); margin-bottom: 24px; font-size: 14px;">${escapeHtml(message)}</p>
             <div style="display: flex; gap: 12px; justify-content: center;">
                 <button id="btn-cancelar" class="btn-secondary-custom" style="flex: 1;"><i class="bi bi-x"></i> Cancelar</button>
-                <button id="btn-confirmar" class="btn-danger-custom" style="flex: 1;"><i class="bi bi-check"></i> Sí, eliminar</button>
+                <button id="btn-confirmar" class="${confirmClass}" style="flex: 1;"><i class="bi bi-check"></i> ${escapeHtml(confirmText)}</button>
             </div>
         `;
 

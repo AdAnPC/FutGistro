@@ -40,6 +40,7 @@ const Jugador = sequelize.define('Jugador', {
         allowNull: true
     },
     lugar_nacimiento: { type: DataTypes.STRING(100), allowNull: true },
+    departamento_nacimiento: { type: DataTypes.STRING(100), allowNull: true },
     estatura: { type: DataTypes.STRING(20), allowNull: true },
     peso: { type: DataTypes.STRING(20), allowNull: true },
     tipo_sangre: { type: DataTypes.STRING(10), allowNull: true },
@@ -47,6 +48,7 @@ const Jugador = sequelize.define('Jugador', {
     cc_padre: { type: DataTypes.STRING(50), allowNull: true },
     nombre_madre: { type: DataTypes.STRING(150), allowNull: true },
     cc_madre: { type: DataTypes.STRING(50), allowNull: true },
+    departamento_residencia: { type: DataTypes.STRING(100), allowNull: true },
     ciudad: { type: DataTypes.STRING(100), allowNull: true },
     numero_fijo: { type: DataTypes.STRING(20), allowNull: true },
     nombre_padre: {

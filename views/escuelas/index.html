@@ -41,6 +41,14 @@
                                 <input type="text" id="director" class="form-control-custom"
                                     placeholder="Nombre del director">
                             </div>
+                            <div class="col-md-6">
+                                <label for="departamento" class="form-label-custom">Departamento</label>
+                                <select id="departamento" class="form-select-custom" onchange="poblarCiudades(this.value, 'ciudad')"></select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="ciudad" class="form-label-custom">Ciudad</label>
+                                <select id="ciudad" class="form-select-custom"></select>
+                            </div>
                             <div class="col-md-12">
                                 <label for="direccion" class="form-label-custom">Dirección</label>
                                 <input type="text" id="direccion" class="form-control-custom"
@@ -82,6 +90,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/colombiaData.js"></script>
     <script src="/js/app.js"></script>
     <script>
         let escuelaModal;
@@ -183,6 +192,7 @@
               <h5 style="font-weight:700;font-size:18px;margin-bottom:4px">${escapeHtml(esc.nombre)}</h5>
               
               ${esc.director ? `<p style="font-size:13px;color:var(--text-secondary);margin-bottom:4px"><i class="bi bi-person-fill me-1"></i>${escapeHtml(esc.director)}</p>` : ''}
+              ${esc.departamento && esc.ciudad ? `<p style="font-size:12px;color:var(--text-muted);margin-bottom:4px"><i class="bi bi-map me-1"></i>${escapeHtml(esc.ciudad)}, ${escapeHtml(esc.departamento)}</p>` : ''}
               ${esc.direccion ? `<p style="font-size:12px;color:var(--text-muted);margin-bottom:4px"><i class="bi bi-geo-alt me-1"></i>${escapeHtml(esc.direccion)}</p>` : ''}
               ${esc.telefono ? `<p style="font-size:12px;color:var(--text-muted);margin-bottom:4px"><i class="bi bi-telephone me-1"></i>${escapeHtml(esc.telefono)}</p>` : ''}
               ${esc.email ? `<p style="font-size:12px;color:var(--text-muted);margin-bottom:4px"><i class="bi bi-envelope me-1"></i>${escapeHtml(esc.email)}</p>` : ''}
@@ -208,6 +218,16 @@
             document.getElementById('email').value = data ? (data.email || '') : '';
             document.getElementById('precio_mensualidad').value = data ? (data.precio_mensualidad || 0) : 0;
             document.getElementById('modalTitle').textContent = data ? 'Editar Escuela' : 'Nueva Escuela';
+
+            poblarDepartamentos('departamento');
+            if (data && data.departamento) {
+                document.getElementById('departamento').value = data.departamento;
+                poblarCiudades(data.departamento, 'ciudad');
+                if (data.ciudad) document.getElementById('ciudad').value = data.ciudad;
+            } else {
+                document.getElementById('departamento').value = '';
+                poblarCiudades('', 'ciudad');
+            }
 
             // Show active toggle only when editing
             const activaGroup = document.getElementById('activaGroup');
@@ -237,6 +257,8 @@
             const id = document.getElementById('escuelaId').value;
             const body = {
                 nombre: document.getElementById('nombre').value,
+                departamento: document.getElementById('departamento').value,
+                ciudad: document.getElementById('ciudad').value,
                 direccion: document.getElementById('direccion').value,
                 telefono: document.getElementById('telefono').value,
                 director: document.getElementById('director').value,

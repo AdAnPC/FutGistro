@@ -21,6 +21,7 @@
   <div class="app-layout" id="appLayout"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+  <script src="/js/colombiaData.js"></script>
   <script src="/js/app.js"></script>
   <script>
     let isEditing = false;
@@ -73,13 +74,17 @@
                       <label for="nombre" class="form-label-custom">Nombre completo *</label>
                       <input type="text" id="nombre" name="nombre" class="form-control-custom" placeholder="Nombre completo del jugador" required>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-6">
                       <label for="fecha_nacimiento" class="form-label-custom">Fecha de nacimiento *</label>
                       <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" class="form-control-custom" required onchange="calcularEdadField()">
                     </div>
-                    <div class="col-md-3">
-                      <label for="lugar_nacimiento" class="form-label-custom">Lugar de nacimiento</label>
-                      <input type="text" id="lugar_nacimiento" name="lugar_nacimiento" class="form-control-custom" placeholder="Ciudad, Depto">
+                    <div class="col-md-6">
+                      <label for="departamento_nacimiento" class="form-label-custom">Dpto. Nacimiento</label>
+                      <select id="departamento_nacimiento" name="departamento_nacimiento" class="form-select-custom" onchange="poblarCiudades(this.value, 'lugar_nacimiento')"></select>
+                    </div>
+                    <div class="col-md-6">
+                      <label for="lugar_nacimiento" class="form-label-custom">Ciudad Nacimiento</label>
+                      <select id="lugar_nacimiento" name="lugar_nacimiento" class="form-select-custom"></select>
                     </div>
                     
                     <div class="col-md-3">
@@ -107,9 +112,13 @@
                       <label for="peso" class="form-label-custom">Peso</label>
                       <input type="text" id="peso" name="peso" class="form-control-custom" placeholder="Ej: 45kg">
                     </div>
-                    <div class="col-md-6">
-                      <label for="ciudad" class="form-label-custom">Ciudad, Municipio o Vereda</label>
-                      <input type="text" id="ciudad" name="ciudad" class="form-control-custom" placeholder="Lugar de residencia">
+                    <div class="col-md-3">
+                      <label for="departamento_residencia" class="form-label-custom">Dpto. Residencia</label>
+                      <select id="departamento_residencia" name="departamento_residencia" class="form-select-custom" onchange="poblarCiudades(this.value, 'ciudad')"></select>
+                    </div>
+                    <div class="col-md-3">
+                      <label for="ciudad" class="form-label-custom">Ciudad Residencia</label>
+                      <select id="ciudad" name="ciudad" class="form-select-custom"></select>
                     </div>
 
                     <div class="col-md-4">
@@ -207,7 +216,7 @@
                       <input type="file" id="foto" name="foto" accept="image/*,.pdf" style="display:none" onchange="onFileSlotChange(1)">
                     </div>
                     <!-- Slot 2: Tarjeta Identidad (Frente) -->
-                    <div class="col-md-4 upload-slot" id="uploadSlot2" style="display:none">
+                    <div class="col-md-4 upload-slot" id="uploadSlot2">
                       <label class="form-label-custom">2. Tarjeta Identidad (Frente)</label>
                       <div class="file-upload-area" onclick="document.getElementById('documento_extra2').click()">
                         <i class="bi bi-file-earmark-person-fill d-block"></i>
@@ -217,7 +226,7 @@
                       <input type="file" id="documento_extra2" name="documento_extra2" accept="image/*,.pdf" style="display:none" onchange="onFileSlotChange(2)">
                     </div>
                     <!-- Slot 3: Tarjeta Identidad (Reverso) -->
-                    <div class="col-md-4 upload-slot" id="uploadSlot3" style="display:none">
+                    <div class="col-md-4 upload-slot" id="uploadSlot3">
                       <label class="form-label-custom">3. Tarjeta Identidad (Reverso)</label>
                       <div class="file-upload-area" onclick="document.getElementById('documento_extra4').click()">
                         <i class="bi bi-file-earmark-person-fill d-block"></i>
@@ -227,7 +236,7 @@
                       <input type="file" id="documento_extra4" name="documento_extra4" accept="image/*,.pdf" style="display:none" onchange="onFileSlotChange(3)">
                     </div>
                     <!-- Slot 4: Registro civil -->
-                    <div class="col-md-4 upload-slot" id="uploadSlot4" style="display:none">
+                    <div class="col-md-4 upload-slot" id="uploadSlot4">
                       <label class="form-label-custom">4. Registro civil</label>
                       <div class="file-upload-area" onclick="document.getElementById('registro_civil').click()">
                         <i class="bi bi-file-earmark-text-fill d-block"></i>
@@ -237,7 +246,7 @@
                       <input type="file" id="registro_civil" name="registro_civil" accept="image/*,.pdf" style="display:none" onchange="onFileSlotChange(4)">
                     </div>
                     <!-- Slot 5: Documento del padre o madre -->
-                    <div class="col-md-4 upload-slot" id="uploadSlot5" style="display:none">
+                    <div class="col-md-4 upload-slot" id="uploadSlot5">
                       <label class="form-label-custom">5. Documento del padre o madre</label>
                       <div class="file-upload-area" onclick="document.getElementById('documento_acudiente').click()">
                         <i class="bi bi-file-earmark-person-fill d-block"></i>
@@ -247,7 +256,7 @@
                       <input type="file" id="documento_acudiente" name="documento_acudiente" accept="image/*,.pdf" style="display:none" onchange="onFileSlotChange(5)">
                     </div>
                     <!-- Slot 6: Certificado de EPS -->
-                    <div class="col-md-4 upload-slot" id="uploadSlot6" style="display:none">
+                    <div class="col-md-4 upload-slot" id="uploadSlot6">
                       <label class="form-label-custom">6. Certificado de EPS</label>
                       <div class="file-upload-area" onclick="document.getElementById('documento_extra1').click()">
                         <i class="bi bi-file-earmark-plus-fill d-block"></i>
@@ -257,7 +266,7 @@
                       <input type="file" id="documento_extra1" name="documento_extra1" accept="image/*,.pdf" style="display:none" onchange="onFileSlotChange(6)">
                     </div>
                     <!-- Slot 7: Certificado de estudio -->
-                    <div class="col-md-4 upload-slot" id="uploadSlot7" style="display:none">
+                    <div class="col-md-4 upload-slot" id="uploadSlot7">
                       <label class="form-label-custom">7. Certificado de estudio</label>
                       <div class="file-upload-area" onclick="document.getElementById('documento_extra3').click()">
                         <i class="bi bi-file-earmark-plus-fill d-block"></i>
@@ -347,6 +356,12 @@
         document.getElementById('btn-next-1').style.display = 'block';
       }
 
+      // Poblados iniciales (si no hay datos, inicializa los combobox vacios)
+      poblarDepartamentos('departamento_nacimiento');
+      poblarDepartamentos('departamento_residencia');
+      poblarCiudades('', 'lugar_nacimiento');
+      poblarCiudades('', 'ciudad');
+
       // Load categories and schools
       await loadCategorias();
       await loadEscuelas();
@@ -431,7 +446,18 @@
           document.getElementById('nombre_padre').value = j.nombre_padre || '';
           document.getElementById('telefono_padre').value = j.telefono_padre || '';
 
+          if (j.departamento_nacimiento) {
+             document.getElementById('departamento_nacimiento').value = j.departamento_nacimiento;
+             poblarCiudades(j.departamento_nacimiento, 'lugar_nacimiento');
+          }
           document.getElementById('lugar_nacimiento').value = j.lugar_nacimiento || '';
+
+          if (j.departamento_residencia) {
+             document.getElementById('departamento_residencia').value = j.departamento_residencia;
+             poblarCiudades(j.departamento_residencia, 'ciudad');
+          }
+          document.getElementById('ciudad').value = j.ciudad || '';
+
           document.getElementById('estatura').value = j.estatura || '';
           document.getElementById('peso').value = j.peso || '';
           document.getElementById('tipo_sangre').value = j.tipo_sangre || '';
@@ -439,7 +465,6 @@
           document.getElementById('cc_padre').value = j.cc_padre || '';
           document.getElementById('nombre_madre').value = j.nombre_madre || '';
           document.getElementById('cc_madre').value = j.cc_madre || '';
-          document.getElementById('ciudad').value = j.ciudad || '';
           document.getElementById('numero_fijo').value = j.numero_fijo || '';
 
           document.getElementById('categoria_id').value = j.categoria_id || '';
@@ -448,7 +473,7 @@
 
           calcularEdadField();
 
-          // Show existing documents and reveal their slots
+          // Show existing documents previews
           const existingFiles = [
             { key: 'foto', preview: 'fotoPreview', slot: 1 },
             { key: 'documento_extra2', preview: 'docExtra2Preview', slot: 2 },
@@ -458,18 +483,11 @@
             { key: 'documento_extra1', preview: 'docExtra1Preview', slot: 6 },
             { key: 'documento_extra3', preview: 'docExtra3Preview', slot: 7 }
           ];
-          let lastFilledSlot = 0;
           existingFiles.forEach(f => {
             if (j[f.key]) {
-              showSlot(f.slot);
               document.getElementById(f.preview).innerHTML = `<img src="${j[f.key]}" class="preview-img" alt="${f.key}">`;
-              lastFilledSlot = f.slot;
             }
           });
-          // Show the next empty slot after the last filled one
-          if (lastFilledSlot > 0 && lastFilledSlot < 7) {
-            showSlot(lastFilledSlot + 1);
-          }
           updateFileCount();
           if (j.firma_padre) {
             document.getElementById('existingSignature').style.display = 'block';
@@ -575,8 +593,8 @@
 
         // Text fields
         const fields = [
-          'nombre', 'fecha_nacimiento', 'lugar_nacimiento', 'estatura', 'peso', 'tipo_sangre', 'eps',
-          'documento', 'ciudad', 'direccion', 'numero_fijo', 'telefono', 'nombre_padre', 'cc_padre',
+          'nombre', 'fecha_nacimiento', 'lugar_nacimiento', 'departamento_nacimiento', 'estatura', 'peso', 'tipo_sangre', 'eps',
+          'documento', 'ciudad', 'departamento_residencia', 'direccion', 'numero_fijo', 'telefono', 'nombre_padre', 'cc_padre',
           'nombre_madre', 'cc_madre', 'telefono_padre', 'categoria_id', 'escuela_id', 'fecha_registro'
         ];
 
@@ -585,22 +603,20 @@
           if (val) formData.append(field, val);
         });
 
-        // File fields (max 7)
-        const fotoFile = document.getElementById('foto').files[0];
-        const rcFile = document.getElementById('registro_civil').files[0];
-        const docFile = document.getElementById('documento_acudiente').files[0];
-        const extra1File = document.getElementById('documento_extra1').files[0];
-        const extra2File = document.getElementById('documento_extra2').files[0];
-        const extra3File = document.getElementById('documento_extra3').files[0];
-        const extra4File = document.getElementById('documento_extra4').files[0];
-
-        if (fotoFile) formData.append('foto', fotoFile);
-        if (rcFile) formData.append('registro_civil', rcFile);
-        if (docFile) formData.append('documento_acudiente', docFile);
-        if (extra1File) formData.append('documento_extra1', extra1File);
-        if (extra2File) formData.append('documento_extra2', extra2File);
-        if (extra3File) formData.append('documento_extra3', extra3File);
-        if (extra4File) formData.append('documento_extra4', extra4File);
+        // File fields (max 7) - Prefer background uploaded URLs if present
+        const fileFields = ['foto', 'registro_civil', 'documento_acudiente', 'documento_extra1', 'documento_extra2', 'documento_extra3', 'documento_extra4'];
+        
+        fileFields.forEach(field => {
+            const hiddenUrlInput = document.getElementById(field + '_url');
+            if (hiddenUrlInput && hiddenUrlInput.value) {
+                formData.append(field + '_url', hiddenUrlInput.value);
+            } else {
+                const fileInput = document.getElementById(field);
+                if (fileInput && fileInput.files && fileInput.files[0]) {
+                    formData.append(field, fileInput.files[0]);
+                }
+            }
+        });
 
         // Signature
         if (signaturePad && !signaturePad.isEmpty()) {
@@ -629,26 +645,60 @@
       }
     }
 
-    // ============ PROGRESSIVE FILE UPLOAD ============
-    function showSlot(slotNum) {
-      const slot = document.getElementById('uploadSlot' + slotNum);
-      if (slot && slot.style.display === 'none') {
-        slot.style.display = '';
-        slot.style.opacity = '0';
-        slot.style.transform = 'translateY(10px)';
-        requestAnimationFrame(() => {
-          slot.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-          slot.style.opacity = '1';
-          slot.style.transform = 'translateY(0)';
-        });
-      }
-    }
+    // ============ FILES LOGIC ============
+    // Eliminamos showSlot() ya que ahora todos los slots son visibles por defecto
 
-    function onFileSlotChange(currentSlot) {
-      const nextSlot = currentSlot + 1;
-      if (nextSlot <= 7) {
-        showSlot(nextSlot);
+    async function onFileSlotChange(currentSlot) {
+      // Subida en segundo plano (Background upload)
+      const fileInputIds = ['foto', 'documento_extra2', 'documento_extra4', 'registro_civil', 'documento_acudiente', 'documento_extra1', 'documento_extra3'];
+      const fieldId = fileInputIds[currentSlot - 1];
+      const fileInput = document.getElementById(fieldId);
+      
+      if (fileInput && fileInput.files && fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        const formData = new FormData();
+        formData.append(fieldId, file);
+        
+        const previewIds = ['fotoPreview', 'docExtra2Preview', 'docExtra4Preview', 'registroCivilPreview', 'docAcudientePreview', 'docExtra1Preview', 'docExtra3Preview'];
+        const previewEl = document.getElementById(previewIds[currentSlot - 1]);
+        
+        if (previewEl) {
+            previewEl.innerHTML = '<div class="spinner" style="width:20px;height:20px;border-width:2px;margin:10px auto;"></div><p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:5px;">Subiendo...</p>';
+        }
+
+        try {
+            const res = await fetch('/jugadores/api/upload-temp', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (data.success) {
+                // Determine preview style
+                if (file.type.startsWith('image/')) {
+                    previewEl.innerHTML = `<img src="${data.url}" class="preview-img" style="max-height:80px" alt="preview">`;
+                } else {
+                    previewEl.innerHTML = `<div style="color:var(--success);font-size:24px;text-align:center;"><i class="bi bi-file-earmark-check-fill"></i></div>`;
+                }
+                
+                // Save url to hidden input for fast submit
+                let hiddenInput = document.getElementById(fieldId + '_url');
+                if (!hiddenInput) {
+                    hiddenInput = document.createElement('input');
+                    hiddenInput.type = 'hidden';
+                    hiddenInput.id = fieldId + '_url';
+                    hiddenInput.name = fieldId + '_url';
+                    document.getElementById('jugadorForm').appendChild(hiddenInput);
+                }
+                hiddenInput.value = data.url;
+            } else {
+                previewEl.innerHTML = `<div style="color:var(--danger);font-size:12px;text-align:center;">Error al subir: ${data.message}</div>`;
+            }
+        } catch (error) {
+            console.error('Error in background upload:', error);
+            if (previewEl) previewEl.innerHTML = `<div style="color:var(--danger);font-size:12px;text-align:center;">Error de red</div>`;
+        }
       }
+
       updateFileCount();
     }
 

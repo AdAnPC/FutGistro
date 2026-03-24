@@ -22,6 +22,7 @@ router.get('/editar/:id', authMiddleware, jugadorController.editarPage);
 router.get('/ficha/:id', authMiddleware, jugadorController.fichaPage);
 
 // API routes
+router.post('/api/upload-temp', authMiddleware, upload.any(), jugadorController.uploadTemp);
 router.get('/api/estadisticas', authMiddleware, jugadorController.estadisticas);
 router.get('/api', authMiddleware, jugadorController.listar);
 router.get('/api/:id', authMiddleware, jugadorController.obtener);

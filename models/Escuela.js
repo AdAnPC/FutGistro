@@ -21,6 +21,14 @@ const Escuela = sequelize.define('Escuela', {
         type: DataTypes.STRING(255),
         allowNull: true
     },
+    departamento: {
+        type: DataTypes.STRING(100),
+        allowNull: true
+    },
+    ciudad: {
+        type: DataTypes.STRING(100),
+        allowNull: true
+    },
     telefono: {
         type: DataTypes.STRING(20),
         allowNull: true
