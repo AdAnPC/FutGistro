@@ -167,9 +167,13 @@ async function startServer() {
         await sequelize.authenticate();
         console.log('✅ Conexión a MySQL establecida correctamente');
 
-        // Sync models (Only use alter in development to avoid production data risk)
-        // Sincronizar en producción (temporal) para agregar las nuevas columnas
-        await sequelize.sync({ alter: true });
+        // Sincronizar modelos solo en local para mayor seguridad en producción
+        if (!IS_PRODUCTION) {
+            await sequelize.sync({ alter: true });
+            console.log('✅ Modelos sincronizados con la base de datos (Development)');
+        } else {
+            console.log('✅ Saltando configuración destructiva de DB (Production mode)');
+        }
         console.log('✅ Modelos sincronizados y tablas actualizadas con éxito');
 
         const localIP = getLocalIP();

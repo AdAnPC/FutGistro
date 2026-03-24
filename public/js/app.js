@@ -280,6 +280,9 @@ function renderSidebar(userName, userRole) {
         <a href="/pagos/page" class="sidebar-link" id="nav-pagos">
           <i class="bi bi-cash-stack"></i> Pagos
         </a>
+        <a href="/torneos" class="sidebar-link" id="nav-torneos">
+          <i class="bi bi-trophy-fill"></i> Torneos
+        </a>
         ${userRole === 'superadmin' ? `
         <div class="sidebar-label">Super Admin</div>
         <a href="/escuelas/page" class="sidebar-link" id="nav-escuelas">
