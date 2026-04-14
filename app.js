@@ -3,7 +3,7 @@ const express = require('express');
 const session = require('express-session');
 const path = require('path');
 const os = require('os');
-const { sequelize } = require('./models');
+const { sequelize, Usuario } = require('./models');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
@@ -163,6 +163,28 @@ app.use((err, req, res, next) => {
     res.status(500).json({ success: false, message: 'Error interno del servidor' });
 });
 
+// Suministrar el primer usuario administrador si no existe
+async function seedInitialAdmin() {
+    try {
+        const adminEmail = 'superadmin@futgistro.com';
+        const admin = await Usuario.findOne({ where: { email: adminEmail } });
+
+        if (!admin) {
+            const bcrypt = require('bcrypt');
+            const hashedPassword = await bcrypt.hash('FG-SuperAdmin_2026_!#@_SecureAccess_99', 12);
+            await Usuario.create({
+                nombre: 'Super Administrador',
+                email: adminEmail,
+                password: hashedPassword,
+                rol: 'superadmin'
+            });
+            console.log('✅ Super Administrador inicial creado con éxito');
+        }
+    } catch (error) {
+        console.error('⚠️ Error al crear usuario inicial:', error.message);
+    }
+}
+
 // Database sync and start
 async function startServer() {
     try {
@@ -178,6 +200,9 @@ async function startServer() {
             await sequelize.sync();
             console.log('✅ Base de datos sincronizada (Modo Producción)');
         }
+
+        // Crear usuario administrador inicial si no existe
+        await seedInitialAdmin();
 
         const localIP = getLocalIP();
 
