@@ -116,6 +116,7 @@ const jugadorRoutes = require('./routes/jugadorRoutes');
 const asistenciaRoutes = require('./routes/asistenciaRoutes');
 const escuelaRoutes = require('./routes/escuelaRoutes');
 const pagoRoutes = require('./routes/pagoRoutes');
+const torneoRoutes = require('./routes/torneoRoutes');
 const { authMiddleware } = require('./middleware/authMiddleware');
 
 // Auth routes (Apply stricter rate limiter to authentication endpoints)
@@ -125,6 +126,7 @@ app.use('/jugadores', jugadorRoutes);
 app.use('/asistencia', asistenciaRoutes);
 app.use('/escuelas', escuelaRoutes);
 app.use('/pagos', pagoRoutes);
+app.use('/torneos', torneoRoutes);
 
 // Dashboard
 app.get('/dashboard', authMiddleware, (req, res) => {
@@ -167,14 +169,15 @@ async function startServer() {
         await sequelize.authenticate();
         console.log('✅ Conexión a MySQL establecida correctamente');
 
-        // Sincronizar modelos solo en local para mayor seguridad en producción
+        // Sincronizar modelos
         if (!IS_PRODUCTION) {
             await sequelize.sync({ alter: true });
             console.log('✅ Modelos sincronizados con la base de datos (Development)');
         } else {
-            console.log('✅ Saltando configuración destructiva de DB (Production mode)');
+            // En producción, sincronizar sin alter:true para crear tablas faltantes de forma segura
+            await sequelize.sync();
+            console.log('✅ Base de datos sincronizada (Modo Producción)');
         }
-        console.log('✅ Modelos sincronizados y tablas actualizadas con éxito');
 
         const localIP = getLocalIP();
 
