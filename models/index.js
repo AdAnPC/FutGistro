@@ -5,6 +5,9 @@ const Jugador = require('./Jugador');
 const Asistencia = require('./Asistencia');
 const Escuela = require('./Escuela');
 const Pago = require('./Pago');
+const Torneo = require('./Torneo');
+const TorneoParticipante = require('./TorneoParticipante');
+const Partido = require('./Partido');
 
 // === Associations ===
 
@@ -68,6 +71,66 @@ Usuario.belongsTo(Escuela, {
     as: 'escuela'
 });
 
+// Categoria <-> Torneo (1:N) - Un torneo es para una categoria
+Categoria.hasMany(Torneo, {
+    foreignKey: 'categoria_id',
+    as: 'torneos'
+});
+Torneo.belongsTo(Categoria, {
+    foreignKey: 'categoria_id',
+    as: 'categoria'
+});
+
+// Escuela <-> Torneo (Organizer)
+Escuela.hasMany(Torneo, {
+    foreignKey: 'organizador_id',
+    as: 'torneos_organizados'
+});
+Torneo.belongsTo(Escuela, {
+    foreignKey: 'organizador_id',
+    as: 'organizador'
+});
+
+// Torneo <-> TorneoParticipante (1:N)
+Torneo.hasMany(TorneoParticipante, {
+    foreignKey: 'torneo_id',
+    as: 'participantes'
+});
+TorneoParticipante.belongsTo(Torneo, {
+    foreignKey: 'torneo_id',
+    as: 'torneo'
+});
+
+// Escuela <-> TorneoParticipante (1:N)
+Escuela.hasMany(TorneoParticipante, {
+    foreignKey: 'escuela_id',
+    as: 'participaciones_torneos'
+});
+TorneoParticipante.belongsTo(Escuela, {
+    foreignKey: 'escuela_id',
+    as: 'escuela'
+});
+
+// Torneo <-> Partido (1:N)
+Torneo.hasMany(Partido, {
+    foreignKey: 'torneo_id',
+    as: 'partidos'
+});
+Partido.belongsTo(Torneo, {
+    foreignKey: 'torneo_id',
+    as: 'torneo'
+});
+
+// Escuela <-> Partido (Local vs Visitante)
+Partido.belongsTo(Escuela, {
+    foreignKey: 'escuela_local_id',
+    as: 'escuela_local'
+});
+Partido.belongsTo(Escuela, {
+    foreignKey: 'escuela_visitante_id',
+    as: 'escuela_visitante'
+});
+
 module.exports = {
     sequelize,
     Usuario,
@@ -75,5 +138,8 @@ module.exports = {
     Jugador,
     Asistencia,
     Escuela,
-    Pago
+    Pago,
+    Torneo,
+    TorneoParticipante,
+    Partido
 };

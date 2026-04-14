@@ -191,19 +191,36 @@ const pagoController = {
 
             const updateData = { ...req.body };
 
+            // REGLA DE NEGOCIO: Un pago confirmado NO puede revertirse a pendiente
+            if (pago.estado === 'pagado' && updateData.estado === 'pendiente') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Un pago ya confirmado no puede revertirse a pendiente'
+                });
+            }
+
             // If marking as paid and no fecha_pago provided, use today
             if (updateData.estado === 'pagado' && !updateData.fecha_pago) {
                 updateData.fecha_pago = new Date().toISOString().split('T')[0];
             }
 
-            // Auto-reflect amount if currently 0
+            // If reverting to pending, ALWAYS clear fecha_pago and metodo_pago
+            // Sequelize ignores null values in update(), so we use set() + save() explicitly
+            if (updateData.estado === 'pendiente') {
+                updateData.fecha_pago  = null;
+                updateData.metodo_pago = updateData.metodo_pago || null;
+            }
+
+            // Auto-reflect amount if currently 0 and marking as paid
             if (updateData.estado === 'pagado' && pago.monto == 0 && !updateData.monto) {
                 if (pago.jugador && pago.jugador.escuela && pago.jugador.escuela.precio_mensualidad) {
                     updateData.monto = parseFloat(pago.jugador.escuela.precio_mensualidad) || 0;
                 }
             }
 
-            await pago.update(updateData);
+            // Use set() + save() to allow null fields to be persisted
+            pago.set(updateData);
+            await pago.save();
 
             // Reload with associations
             const pagoActualizado = await Pago.findByPk(pago.id, {

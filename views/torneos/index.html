@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Gestión de torneos por ciudad">
+    <link rel="icon" href="/icons/logo.png" type="image/png">
+    <title>Torneos | futGistro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/styles.css">
+
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#10b981">
+    <link rel="apple-touch-icon" href="/icons/logo.png">
+</head>
+
+<body>
+    <div class="app-layout" id="appLayout"></div>
+
+    <!-- Modal para Crear / Editar Torneo -->
+    <div class="modal fade" id="torneoModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Nuevo Torneo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="torneoForm">
+                    <div class="modal-body">
+                        <input type="hidden" id="torneoId">
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label for="nombre" class="form-label-custom">Nombre del Torneo *</label>
+                                <input type="text" id="nombre" class="form-control-custom"
+                                    placeholder="Ej: Copa Amistad 2026" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="departamento" class="form-label-custom">Departamento *</label>
+                                <select id="departamento" class="form-select-custom" required></select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="ciudad" class="form-label-custom">Ciudad *</label>
+                                <select id="ciudad" class="form-select-custom" required></select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="fecha" class="form-label-custom">Fecha del Evento *</label>
+                                <input type="date" id="fecha" class="form-control-custom" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="categoria_id" class="form-label-custom">Categoría *</label>
+                                <select id="categoria_id" class="form-select-custom" required>
+                                    <option value="">Seleccionar categoría...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-12">
+                                <label for="descripcion" class="form-label-custom">Descripción / Info adicional</label>
+                                <textarea id="descripcion" class="form-control-custom" rows="3" placeholder="Detalles del torneo..."></textarea>
+                            </div>
+                            <div class="col-md-12">
+                                <label for="estado" class="form-label-custom">Estado</label>
+                                <select id="estado" class="form-select-custom">
+                                    <option value="inscripciones">Inscripciones abiertas</option>
+                                    <option value="en_progreso">En curso</option>
+                                    <option value="finalizado">Finalizado</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary-custom" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn-primary-custom">
+                            <i class="bi bi-check-circle"></i> Guardar Torneo
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para ver Escuelas Participantes (por ciudad) -->
+    <div class="modal fade" id="participantesModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-building me-2"></i>Escuelas en la Ciudad</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="participantesList">
+                        <!-- Se llenará dinámicamente -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-primary-custom" data-bs-dismiss="modal">Entendido</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para ver Calendario de Partidos -->
+    <div class="modal fade" id="partidosModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-calendar3 me-2"></i>Programación y Resultados</h5>
+                    <div style="margin-left:auto;display:flex;gap:8px">
+                        <button class="btn-primary-custom btn-sm" id="btn-nuevo-partido">
+                           <i class="bi bi-plus-circle"></i> Nuevo Encuentro
+                        </button>
+                    </div>
+                    <button type="button" class="btn-close ms-2" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="partidosList" class="row g-3">
+                        <!-- Lista de partidos (VSCards) -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Programar / Editar Partido -->
+    <div class="modal fade" id="formPartidoModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="formPartidoTitle">Programar Partido</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="partidoForm">
+                    <div class="modal-body">
+                        <input type="hidden" id="partidoId">
+                        <input type="hidden" id="torneoIdPartidos">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label-custom">Local</label>
+                                <select id="escuela_local_id" class="form-select-custom" required>
+                                    <option value="">Seleccionar equipo...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label-custom">Visitante</label>
+                                <select id="escuela_visitante_id" class="form-select-custom" required>
+                                    <option value="">Seleccionar equipo...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label-custom">Fecha</label>
+                                <input type="date" id="fecha_partido" class="form-control-custom" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label-custom">Hora</label>
+                                <input type="time" id="hora" class="form-control-custom" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label-custom">Goles Local</label>
+                                <input type="number" id="goles_local" class="form-control-custom" value="0" min="0">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label-custom">Goles Visitante</label>
+                                <input type="number" id="goles_visitante" class="form-control-custom" value="0" min="0">
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label-custom">Estado</label>
+                                <select id="estado_partido" class="form-select-custom">
+                                    <option value="programado">Programado</option>
+                                    <option value="finalizado">Finalizado</option>
+                                    <option value="cancelado">Cancelado</option>
+                                </select>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label-custom">Observaciones</label>
+                                <textarea id="observaciones" class="form-control-custom" rows="2"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary-custom" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn-primary-custom" id="btnSavePartido">Guardar Cambio</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/colombiaData.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/torneos.js"></script>
+</body>
+
+</html>

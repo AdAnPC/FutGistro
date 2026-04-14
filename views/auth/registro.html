@@ -18,12 +18,10 @@
 
 <body>
   <div class="login-page">
-    <div class="login-card slide-up" style="max-width: 480px">
+    <div class="login-card slide-up" style="max-width:480px">
       <div class="logo">
-        <div class="logo-icon"
-          style="background: transparent; display: flex; align-items: center; justify-content: center;">
-          <img src="/icons/logo.png" alt="futGistro"
-            style="width: 80px; height: 80px; object-fit: contain; border-radius: 8px;">
+        <div class="logo-icon" style="background:transparent;display:flex;align-items:center;justify-content:center;">
+          <img src="/icons/logo.png" alt="futGistro" style="width:80px;height:80px;object-fit:contain;border-radius:8px;">
         </div>
         <h3>Crear Usuario</h3>
         <p>Registrar un nuevo usuario en el sistema</p>
@@ -34,18 +32,14 @@
           <label for="nombre" class="form-label-custom">Nombre completo</label>
           <input type="text" id="nombre" class="form-control-custom" placeholder="Nombre del usuario" required>
         </div>
-
         <div class="mb-3">
           <label for="email" class="form-label-custom">Correo electrónico</label>
           <input type="email" id="email" class="form-control-custom" placeholder="correo@ejemplo.com" required>
         </div>
-
         <div class="mb-3">
           <label for="password" class="form-label-custom">Contraseña</label>
-          <input type="password" id="password" class="form-control-custom" placeholder="Mínimo 6 caracteres" required
-            minlength="6">
+          <input type="password" id="password" class="form-control-custom" placeholder="Mínimo 6 caracteres" required minlength="6">
         </div>
-
         <div class="mb-3">
           <label for="rol" class="form-label-custom">Rol</label>
           <select id="rol" class="form-select-custom" required>
@@ -54,19 +48,16 @@
             <option value="superadmin">Super Administrador</option>
           </select>
         </div>
-
         <div class="mb-4" id="escuelaGroup">
           <label for="escuela_nombre" class="form-label-custom">Nombre de tu Escuela / Sede *</label>
           <input type="text" id="escuela_nombre" class="form-control-custom" placeholder="Ej: futGistro Norte" required>
           <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
-            <i class="bi bi-info-circle"></i> Se creará la escuela automáticamente. El usuario solo verá jugadores de su
-            escuela.
+            <i class="bi bi-info-circle"></i> Se creará la escuela automáticamente. El usuario solo verá jugadores de su escuela.
           </div>
         </div>
 
         <div id="errorMsg" class="mb-3" style="display:none">
-          <div
-            style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius-sm);padding:10px 14px;color:var(--danger);font-size:13px">
+          <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius-sm);padding:10px 14px;color:var(--danger);font-size:13px">
             <i class="bi bi-exclamation-circle me-1"></i>
             <span id="errorText"></span>
           </div>
@@ -86,61 +77,7 @@
   </div>
 
   <script src="/js/app.js"></script>
-  <script>
-    const form = document.getElementById('registroForm');
-    const errorMsg = document.getElementById('errorMsg');
-    const errorText = document.getElementById('errorText');
-
-    document.addEventListener('DOMContentLoaded', () => {
-      // Toggle escuela field based on role
-      const rolSelect = document.getElementById('rol');
-      rolSelect.addEventListener('change', () => {
-        const group = document.getElementById('escuelaGroup');
-        const escInput = document.getElementById('escuela_nombre');
-        if (rolSelect.value === 'superadmin') {
-          group.style.display = 'none';
-          escInput.removeAttribute('required');
-        } else {
-          group.style.display = '';
-          escInput.setAttribute('required', 'required');
-        }
-      });
-    });
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      errorMsg.style.display = 'none';
-
-      const btn = document.getElementById('btnRegistro');
-      btn.disabled = true;
-      btn.innerHTML = '<div class="spinner" style="width:20px;height:20px;border-width:2px"></div> Creando...';
-
-      try {
-        const data = await fetchAPI('/auth/registro', {
-          method: 'POST',
-          body: {
-            nombre: document.getElementById('nombre').value,
-            email: document.getElementById('email').value,
-            password: document.getElementById('password').value,
-            rol: document.getElementById('rol').value,
-            escuela_nombre: document.getElementById('escuela_nombre').value || null
-          }
-        });
-
-        if (data && data.success) {
-          showToast('Usuario y escuela creados exitosamente');
-          setTimeout(() => {
-            window.location.href = '/dashboard';
-          }, 1500);
-        }
-      } catch (error) {
-        errorMsg.style.display = 'block';
-        errorText.textContent = error.message || 'Error al crear usuario';
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-person-plus"></i> Crear Usuario';
-      }
-    });
-  </script>
+  <script src="/js/registro.js"></script>
 </body>
 
 </html>

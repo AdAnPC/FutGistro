@@ -85,7 +85,7 @@ function hideLoading() {
 }
 
 // ============ CONFIRM DIALOG ============
-function confirmAction(message, confirmText = 'Sí, eliminar', confirmClass = 'btn-danger-custom', iconClass = 'bi-exclamation-triangle-fill', iconColor = 'var(--danger)') {
+function confirmAction(message, confirmText = 'Sí, Continuar', confirmClass = 'btn-danger-custom', iconClass = 'bi-exclamation-triangle-fill', iconColor = 'var(--danger)') {
     return new Promise((resolve) => {
         const overlay = document.createElement('div');
         Object.assign(overlay.style, {
@@ -135,7 +135,7 @@ function confirmAction(message, confirmText = 'Sí, eliminar', confirmClass = 'b
 
         modal.querySelector('#btn-cancelar').addEventListener('click', () => cleanup(false));
         modal.querySelector('#btn-confirmar').addEventListener('click', () => cleanup(true));
-        
+
         // Clic outside cancels
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) cleanup(false);
@@ -280,7 +280,7 @@ function renderSidebar(userName, userRole) {
         <a href="/pagos/page" class="sidebar-link" id="nav-pagos">
           <i class="bi bi-cash-stack"></i> Pagos
         </a>
-        <a href="/torneos" class="sidebar-link" id="nav-torneos">
+        <a href="/torneos/page" class="sidebar-link" id="nav-torneos">
           <i class="bi bi-trophy-fill"></i> Torneos
         </a>
         ${userRole === 'superadmin' ? `
@@ -337,11 +337,12 @@ function setupFileUpload(inputId, previewId) {
 // Initialize sidebar and PWA on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     initSidebar();
-    
+
     // Register PWA Service Worker
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
-        .then(reg => console.log('PWA Service Worker registrado', reg.scope))
-        .catch(err => console.log('Error registrando Service Worker:', err));
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('PWA Service Worker registrado', reg.scope))
+            .catch(err => console.log('Error registrando Service Worker:', err));
     }
 });
+

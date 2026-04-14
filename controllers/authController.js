@@ -22,7 +22,7 @@ const authController = {
 
             const usuario = await Usuario.findOne({
                 where: { email },
-                include: [{ model: Escuela, as: 'escuela', attributes: ['id', 'nombre', 'logo'] }]
+                include: [{ model: Escuela, as: 'escuela', attributes: ['id', 'nombre', 'logo', 'ciudad', 'departamento'] }]
             });
 
             if (!usuario) {
@@ -220,7 +220,7 @@ const authController = {
     me: async (req, res) => {
         try {
             const usuario = await Usuario.findByPk(req.user.id, {
-                include: [{ model: Escuela, as: 'escuela', attributes: ['id', 'nombre', 'logo', 'ciudad'] }]
+                include: [{ model: Escuela, as: 'escuela', attributes: ['id', 'nombre', 'logo', 'ciudad', 'departamento'] }]
             });
             
             if(!usuario) {
@@ -238,6 +238,7 @@ const authController = {
                     escuela_nombre: usuario.escuela ? usuario.escuela.nombre : null,
                     escuela_logo: usuario.escuela ? usuario.escuela.logo : null,
                     escuela_ciudad: usuario.escuela ? usuario.escuela.ciudad : null,
+                    escuela_departamento: usuario.escuela ? usuario.escuela.departamento : null,
                     necesita_escuela: usuario.rol !== 'superadmin' && !usuario.escuela_id
                 }
             });

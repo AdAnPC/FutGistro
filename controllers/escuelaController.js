@@ -103,6 +103,8 @@ const escuelaController = {
             if (req.body.direccion !== undefined) dataToUpdate.direccion = req.body.direccion || null;
             if (req.body.director !== undefined) dataToUpdate.director = req.body.director || null;
             if (req.body.precio_mensualidad !== undefined) dataToUpdate.precio_mensualidad = parseFloat(req.body.precio_mensualidad) || 0;
+            if (req.body.departamento !== undefined) dataToUpdate.departamento = req.body.departamento || null;
+            if (req.body.ciudad !== undefined) dataToUpdate.ciudad = req.body.ciudad || null;
 
             if (req.file) {
                 eliminarArchivo(escuela.logo);
@@ -122,7 +124,7 @@ const escuelaController = {
     // POST /api/escuelas
     crear: async (req, res) => {
         try {
-            const { nombre, direccion, telefono, director, email, precio_mensualidad } = req.body;
+            const { nombre, direccion, telefono, director, email, precio_mensualidad, departamento, ciudad } = req.body;
 
             if (!nombre) {
                 return res.status(400).json({
@@ -137,7 +139,9 @@ const escuelaController = {
                 telefono: telefono || null,
                 director: director || null,
                 email: email ? email : null,
-                precio_mensualidad: precio_mensualidad || 0
+                precio_mensualidad: precio_mensualidad || 0,
+                departamento: departamento || null,
+                ciudad: ciudad || null
             };
             if (req.file) dataToCreate.logo = '/uploads/logos/' + req.file.filename;
 
@@ -158,7 +162,7 @@ const escuelaController = {
     // PUT /api/escuelas/:id
     actualizar: async (req, res) => {
         try {
-            const { nombre, direccion, telefono, director, email, activa, precio_mensualidad } = req.body;
+            const { nombre, direccion, telefono, director, email, activa, precio_mensualidad, departamento, ciudad } = req.body;
             const escuela = await Escuela.findByPk(req.params.id);
 
             if (!escuela) {
@@ -172,7 +176,9 @@ const escuelaController = {
                 director: director || null,
                 email: email ? email : null,
                 activa,
-                precio_mensualidad: precio_mensualidad || 0
+                precio_mensualidad: precio_mensualidad || 0,
+                departamento: departamento || null,
+                ciudad: ciudad || null
             };
             if (req.file) {
                 eliminarArchivo(escuela.logo);

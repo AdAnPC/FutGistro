@@ -17,12 +17,10 @@
 
 <body>
   <div class="login-page">
-    <div class="login-card slide-up" style="max-width: 460px">
+    <div class="login-card slide-up" style="max-width:460px">
       <div class="logo">
-        <div class="logo-icon"
-          style="background: transparent; display: flex; align-items: center; justify-content: center;">
-          <img src="/icons/logo.png" alt="futGistro"
-            style="width: 80px; height: 80px; object-fit: contain; border-radius: 8px;">
+        <div class="logo-icon" style="background:transparent;display:flex;align-items:center;justify-content:center;">
+          <img src="/icons/logo.png" alt="futGistro" style="width:80px;height:80px;object-fit:contain;border-radius:8px;">
         </div>
         <h3>Crea tu Escuela</h3>
         <p>Escribe el nombre de tu escuela para continuar. Tus jugadores solo serán visibles dentro de tu escuela.</p>
@@ -35,8 +33,7 @@
         </div>
 
         <div id="errorMsg" class="mb-3" style="display:none">
-          <div
-            style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius-sm);padding:10px 14px;color:var(--danger);font-size:13px">
+          <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius-sm);padding:10px 14px;color:var(--danger);font-size:13px">
             <i class="bi bi-exclamation-circle me-1"></i>
             <span id="errorText"></span>
           </div>
@@ -50,35 +47,7 @@
   </div>
 
   <script src="/js/app.js"></script>
-  <script>
-    document.getElementById('escuelaForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const errorMsg = document.getElementById('errorMsg');
-      const errorText = document.getElementById('errorText');
-      errorMsg.style.display = 'none';
-
-      const btn = document.getElementById('btnSelect');
-      btn.disabled = true;
-      btn.innerHTML = '<div class="spinner" style="width:20px;height:20px;border-width:2px"></div> Creando...';
-
-      try {
-        const data = await fetchAPI('/auth/seleccionar-escuela', {
-          method: 'POST',
-          body: { escuela_nombre: document.getElementById('escuela_nombre').value }
-        });
-
-        if (data && data.success) {
-          showToast('✅ Escuela creada');
-          setTimeout(() => { window.location.href = data.redirect || '/dashboard'; }, 1000);
-        }
-      } catch (error) {
-        errorMsg.style.display = 'block';
-        errorText.textContent = error.message || 'Error';
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-check-circle"></i> Crear Escuela y Continuar';
-      }
-    });
-  </script>
+  <script src="/js/seleccionar-escuela.js"></script>
 </body>
 
 </html>
