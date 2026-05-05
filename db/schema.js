@@ -167,6 +167,11 @@ const escuelasRelations = relations(escuelas, ({ many }) => ({
     jugadores: many(jugadores)
 }));
 
+const categoriasRelations = relations(categorias, ({ many }) => ({
+    jugadores: many(jugadores),
+    torneos: many(torneos)
+}));
+
 const jugadoresRelations = relations(jugadores, ({ one, many }) => ({
     escuela: one(escuelas, {
         fields: [jugadores.escuela_id],
@@ -257,6 +262,7 @@ module.exports = {
     torneo_participantes,
     partidos,
     escuelasRelations,
+    categoriasRelations,
     jugadoresRelations,
     asistenciasRelations,
     pagosRelations,
