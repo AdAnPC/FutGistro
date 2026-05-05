@@ -1,4 +1,6 @@
-const { Categoria, Jugador } = require('../models');
+const { db } = require('../db');
+const { categorias, jugadores } = require('../db/schema.js');
+const { eq, asc, and } = require('drizzle-orm');
 
 const categoriaController = {
     // GET /categorias/page
@@ -9,28 +11,28 @@ const categoriaController = {
     // GET /api/categorias
     listar: async (req, res) => {
         try {
-            let jugadorWhere = {};
+            let userEscuelaId = null;
             if (req.user && req.user.rol !== 'superadmin') {
                 if (req.user.escuela_id) {
-                    jugadorWhere.escuela_id = req.user.escuela_id;
+                    userEscuelaId = req.user.escuela_id;
                 } else {
-                    jugadorWhere.id = -1;
+                    userEscuelaId = -1;
                 }
             }
 
-            const categorias = await Categoria.findAll({
-                include: [{
-                    model: Jugador,
-                    as: 'jugadores',
-                    attributes: ['id'],
-                    where: Object.keys(jugadorWhere).length > 0 ? jugadorWhere : undefined,
-                    required: false
-                }],
-                order: [['edad_min', 'ASC']]
+            // Using relational queries
+            const listaCategorias = await db.query.categorias.findMany({
+                with: {
+                    jugadores: userEscuelaId !== null ? {
+                        where: eq(jugadores.escuela_id, userEscuelaId),
+                        columns: { id: true }
+                    } : { columns: { id: true } }
+                },
+                orderBy: [asc(categorias.edad_min)]
             });
 
-            const data = categorias.map(cat => ({
-                ...cat.toJSON(),
+            const data = listaCategorias.map(cat => ({
+                ...cat,
                 total_jugadores: cat.jugadores ? cat.jugadores.length : 0
             }));
 
@@ -44,23 +46,26 @@ const categoriaController = {
     // GET /api/categorias/:id
     obtener: async (req, res) => {
         try {
-            let jugadorWhere = {};
+            const id = parseInt(req.params.id);
+            let userEscuelaId = null;
             if (req.user && req.user.rol !== 'superadmin') {
                 if (req.user.escuela_id) {
-                    jugadorWhere.escuela_id = req.user.escuela_id;
+                    userEscuelaId = req.user.escuela_id;
                 } else {
-                    jugadorWhere.id = -1;
+                    userEscuelaId = -1;
                 }
             }
 
-            const categoria = await Categoria.findByPk(req.params.id, {
-                include: [{
-                    model: Jugador,
-                    as: 'jugadores',
-                    attributes: ['id', 'nombre', 'fecha_nacimiento', 'documento', 'foto'],
-                    where: Object.keys(jugadorWhere).length > 0 ? jugadorWhere : undefined,
-                    required: false
-                }]
+            const categoria = await db.query.categorias.findFirst({
+                where: eq(categorias.id, id),
+                with: {
+                    jugadores: userEscuelaId !== null ? {
+                        where: eq(jugadores.escuela_id, userEscuelaId),
+                        columns: { id: true, nombre: true, fecha_nacimiento: true, documento: true, foto: true }
+                    } : {
+                        columns: { id: true, nombre: true, fecha_nacimiento: true, documento: true, foto: true }
+                    }
+                }
             });
 
             if (!categoria) {
@@ -93,16 +98,21 @@ const categoriaController = {
                 });
             }
 
-            const categoria = await Categoria.create({ nombre, edad_min, edad_max });
-            res.status(201).json({ success: true, data: categoria, message: 'Categoría creada exitosamente' });
-        } catch (error) {
-            console.error('Error creando categoría:', error);
-            if (error.name === 'SequelizeUniqueConstraintError') {
+            // Check if name already exists
+            const existe = await db.query.categorias.findFirst({ where: eq(categorias.nombre, nombre) });
+            if (existe) {
                 return res.status(400).json({ success: false, message: 'Ya existe una categoría con este nombre' });
             }
-            if (error.name === 'SequelizeValidationError') {
-                return res.status(400).json({ success: false, message: error.errors.map(e => e.message).join(', ') });
-            }
+
+            const insertResult = await db.insert(categorias).values({
+                nombre,
+                edad_min: parseInt(edad_min),
+                edad_max: parseInt(edad_max)
+            }).returning();
+
+            res.status(201).json({ success: true, data: insertResult[0], message: 'Categoría creada exitosamente' });
+        } catch (error) {
+            console.error('Error creando categoría:', error);
             res.status(500).json({ success: false, message: 'Error en el servidor' });
         }
     },
@@ -110,8 +120,10 @@ const categoriaController = {
     // PUT /api/categorias/:id
     actualizar: async (req, res) => {
         try {
+            const id = parseInt(req.params.id);
             const { nombre, edad_min, edad_max } = req.body;
-            const categoria = await Categoria.findByPk(req.params.id);
+            
+            const categoria = await db.query.categorias.findFirst({ where: eq(categorias.id, id) });
 
             if (!categoria) {
                 return res.status(404).json({ success: false, message: 'Categoría no encontrada' });
@@ -124,13 +136,22 @@ const categoriaController = {
                 });
             }
 
-            await categoria.update({ nombre, edad_min, edad_max });
-            res.json({ success: true, data: categoria, message: 'Categoría actualizada exitosamente' });
+            if (nombre && nombre !== categoria.nombre) {
+                const existe = await db.query.categorias.findFirst({ where: eq(categorias.nombre, nombre) });
+                if (existe) {
+                    return res.status(400).json({ success: false, message: 'Ya existe una categoría con este nombre' });
+                }
+            }
+
+            const updateResult = await db.update(categorias).set({
+                nombre,
+                edad_min: parseInt(edad_min),
+                edad_max: parseInt(edad_max)
+            }).where(eq(categorias.id, id)).returning();
+
+            res.json({ success: true, data: updateResult[0], message: 'Categoría actualizada exitosamente' });
         } catch (error) {
             console.error('Error actualizando categoría:', error);
-            if (error.name === 'SequelizeUniqueConstraintError') {
-                return res.status(400).json({ success: false, message: 'Ya existe una categoría con este nombre' });
-            }
             res.status(500).json({ success: false, message: 'Error en el servidor' });
         }
     },
@@ -138,8 +159,10 @@ const categoriaController = {
     // DELETE /api/categorias/:id
     eliminar: async (req, res) => {
         try {
-            const categoria = await Categoria.findByPk(req.params.id, {
-                include: [{ model: Jugador, as: 'jugadores', attributes: ['id'] }]
+            const id = parseInt(req.params.id);
+            const categoria = await db.query.categorias.findFirst({
+                where: eq(categorias.id, id),
+                with: { jugadores: { columns: { id: true } } }
             });
 
             if (!categoria) {
@@ -153,7 +176,7 @@ const categoriaController = {
                 });
             }
 
-            await categoria.destroy();
+            await db.delete(categorias).where(eq(categorias.id, id));
             res.json({ success: true, message: 'Categoría eliminada exitosamente' });
         } catch (error) {
             console.error('Error eliminando categoría:', error);

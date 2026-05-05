@@ -1,6 +1,8 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { Usuario, Escuela } = require('../models');
+const { db } = require('../db');
+const { usuarios, escuelas } = require('../db/schema.js');
+const { eq, desc } = require('drizzle-orm');
 
 const authController = {
     // GET /auth/login
@@ -20,9 +22,9 @@ const authController = {
                 });
             }
 
-            const usuario = await Usuario.findOne({
-                where: { email },
-                include: [{ model: Escuela, as: 'escuela', attributes: ['id', 'nombre', 'logo', 'ciudad', 'departamento'] }]
+            const usuario = await db.query.usuarios.findFirst({
+                where: eq(usuarios.email, email),
+                with: { escuela: { columns: { id: true, nombre: true, logo: true, ciudad: true, departamento: true } } }
             });
 
             if (!usuario) {
@@ -88,7 +90,6 @@ const authController = {
                 });
             }
 
-            // Escuela name is required for non-superadmin users
             const finalRol = rol || 'entrenador';
             if (finalRol !== 'superadmin' && !escuela_nombre) {
                 return res.status(400).json({
@@ -97,7 +98,7 @@ const authController = {
                 });
             }
 
-            const existeUsuario = await Usuario.findOne({ where: { email } });
+            const existeUsuario = await db.query.usuarios.findFirst({ where: eq(usuarios.email, email) });
             if (existeUsuario) {
                 return res.status(400).json({
                     success: false,
@@ -105,20 +106,21 @@ const authController = {
                 });
             }
 
-            // Create or find the school by name
             let escuelaId = null;
             if (finalRol !== 'superadmin' && escuela_nombre) {
-                const [escuela] = await Escuela.findOrCreate({
-                    where: { nombre: escuela_nombre.trim() },
-                    defaults: { nombre: escuela_nombre.trim(), activa: true }
-                });
+                const escuelaNombreLimpio = escuela_nombre.trim();
+                let escuela = await db.query.escuelas.findFirst({ where: eq(escuelas.nombre, escuelaNombreLimpio) });
+                if (!escuela) {
+                    const insertResult = await db.insert(escuelas).values({ nombre: escuelaNombreLimpio, activa: true }).returning();
+                    escuela = insertResult[0];
+                }
                 escuelaId = escuela.id;
             }
 
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash(password, salt);
 
-            await Usuario.create({
+            await db.insert(usuarios).values({
                 nombre,
                 email,
                 password: hashedPassword,
@@ -133,12 +135,6 @@ const authController = {
             });
         } catch (error) {
             console.error('Error en registro:', error);
-            if (error.name === 'SequelizeValidationError') {
-                return res.status(400).json({
-                    success: false,
-                    message: error.errors.map(e => e.message).join(', ')
-                });
-            }
             return res.status(500).json({
                 success: false,
                 message: 'Error en el servidor'
@@ -157,12 +153,12 @@ const authController = {
     // GET /auth/usuarios (admin only)
     listarUsuarios: async (req, res) => {
         try {
-            const usuarios = await Usuario.findAll({
-                attributes: ['id', 'nombre', 'email', 'rol', 'escuela_id', 'created_at'],
-                include: [{ model: Escuela, as: 'escuela', attributes: ['id', 'nombre'] }],
-                order: [['created_at', 'DESC']]
+            const listaUsuarios = await db.query.usuarios.findMany({
+                columns: { id: true, nombre: true, email: true, rol: true, escuela_id: true, createdAt: true },
+                with: { escuela: { columns: { id: true, nombre: true } } },
+                orderBy: [desc(usuarios.createdAt)]
             });
-            res.json({ success: true, data: usuarios });
+            res.json({ success: true, data: listaUsuarios });
         } catch (error) {
             console.error('Error listando usuarios:', error);
             res.status(500).json({ success: false, message: 'Error en el servidor' });
@@ -179,7 +175,7 @@ const authController = {
                     message: 'No puedes eliminar tu propio usuario'
                 });
             }
-            await Usuario.destroy({ where: { id } });
+            await db.delete(usuarios).where(eq(usuarios.id, parseInt(id)));
             res.json({ success: true, message: 'Usuario eliminado' });
         } catch (error) {
             console.error('Error eliminando usuario:', error);
@@ -190,8 +186,8 @@ const authController = {
     // PUT /auth/usuarios/:id (admin only)
     actualizarUsuario: async (req, res) => {
         try {
-            const { id } = req.params;
-            const usuario = await Usuario.findByPk(id);
+            const id = parseInt(req.params.id);
+            const usuario = await db.query.usuarios.findFirst({ where: eq(usuarios.id, id) });
             if (!usuario) {
                 return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
             }
@@ -202,11 +198,14 @@ const authController = {
             if (rol) updateData.rol = rol;
             if (escuela_id !== undefined) updateData.escuela_id = escuela_id || null;
 
-            await usuario.update(updateData);
+            if (Object.keys(updateData).length > 0) {
+                await db.update(usuarios).set(updateData).where(eq(usuarios.id, id));
+            }
             
-            const updated = await Usuario.findByPk(id, {
-                attributes: ['id', 'nombre', 'email', 'rol', 'escuela_id'],
-                include: [{ model: Escuela, as: 'escuela', attributes: ['id', 'nombre'] }]
+            const updated = await db.query.usuarios.findFirst({
+                where: eq(usuarios.id, id),
+                columns: { id: true, nombre: true, email: true, rol: true, escuela_id: true },
+                with: { escuela: { columns: { id: true, nombre: true } } }
             });
 
             res.json({ success: true, data: updated, message: 'Usuario actualizado' });
@@ -219,8 +218,9 @@ const authController = {
     // GET /auth/me
     me: async (req, res) => {
         try {
-            const usuario = await Usuario.findByPk(req.user.id, {
-                include: [{ model: Escuela, as: 'escuela', attributes: ['id', 'nombre', 'logo', 'ciudad', 'departamento'] }]
+            const usuario = await db.query.usuarios.findFirst({
+                where: eq(usuarios.id, req.user.id),
+                with: { escuela: { columns: { id: true, nombre: true, logo: true, ciudad: true, departamento: true } } }
             });
             
             if(!usuario) {
@@ -243,11 +243,12 @@ const authController = {
                 }
             });
         } catch (error) {
+            console.error('Error en /auth/me:', error);
             res.status(500).json({ success: false, message: 'Error interno' });
         }
     },
 
-    // POST /auth/seleccionar-escuela - User creates their school (first time)
+    // POST /auth/seleccionar-escuela
     seleccionarEscuela: async (req, res) => {
         try {
             const { escuela_nombre } = req.body;
@@ -255,21 +256,21 @@ const authController = {
                 return res.status(400).json({ success: false, message: 'Debes escribir el nombre de tu escuela' });
             }
 
-            // Create or find the school
-            const [escuela] = await Escuela.findOrCreate({
-                where: { nombre: escuela_nombre.trim() },
-                defaults: { nombre: escuela_nombre.trim(), activa: true }
-            });
+            const escuelaNombreLimpio = escuela_nombre.trim();
+            let escuela = await db.query.escuelas.findFirst({ where: eq(escuelas.nombre, escuelaNombreLimpio) });
+            
+            if (!escuela) {
+                const insertResult = await db.insert(escuelas).values({ nombre: escuelaNombreLimpio, activa: true }).returning();
+                escuela = insertResult[0];
+            }
 
-            // Update user in DB
-            const usuario = await Usuario.findByPk(req.user.id);
+            const usuario = await db.query.usuarios.findFirst({ where: eq(usuarios.id, req.user.id) });
             if (!usuario) {
                 return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
             }
 
-            await usuario.update({ escuela_id: escuela.id });
+            await db.update(usuarios).set({ escuela_id: escuela.id }).where(eq(usuarios.id, req.user.id));
 
-            // Generate new JWT with escuela info
             const token = jwt.sign(
                 {
                     id: usuario.id,

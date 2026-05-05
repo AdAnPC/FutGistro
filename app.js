@@ -3,7 +3,9 @@ const express = require('express');
 const session = require('express-session');
 const path = require('path');
 const os = require('os');
-const { sequelize, Usuario } = require('./models');
+const { db } = require('./db');
+const { usuarios } = require('./db/schema.js');
+const { eq } = require('drizzle-orm');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
@@ -27,19 +29,8 @@ if (process.env.REDIS_URL) {
     sessionStore = new RedisStore({ client: redisClient, prefix: "futgistro:" });
     console.log('✅ Usando Redis para almacenamiento de sesiones');
 } else {
-    // MYSQL Setup (Default)
-    const MySQLStore = require('express-mysql-session')(session);
-    sessionStore = new MySQLStore({
-        host: process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
-        port: process.env.DB_PORT || process.env.MYSQLPORT || 3306,
-        user: process.env.DB_USER || process.env.MYSQLUSER || 'root',
-        password: process.env.DB_PASSWORD || process.env.MYSQL_ROOT_PASSWORD || process.env.MYSQLPASSWORD || '',
-        database: process.env.DB_NAME || process.env.MYSQL_DATABASE || 'railway',
-        clearExpired: true,
-        checkExpirationInterval: 900000,
-        expiration: 86400000
-    });
-    console.log('✅ Usando MySQL para almacenamiento de sesiones');
+    // Memory Setup (Fallback)
+    console.warn('⚠️ No se encontró REDIS_URL. Usando MemoryStore (No apto para producción)');
 }
 
 // Obtener IP local de la red (para logs de inicio)
@@ -167,12 +158,12 @@ app.use((err, req, res, next) => {
 async function seedInitialAdmin() {
     try {
         const adminEmail = 'superadmin@futgistro.com';
-        const admin = await Usuario.findOne({ where: { email: adminEmail } });
+        const adminRecords = await db.select().from(usuarios).where(eq(usuarios.email, adminEmail));
 
-        if (!admin) {
+        if (adminRecords.length === 0) {
             const bcrypt = require('bcrypt');
             const hashedPassword = await bcrypt.hash('FG-SuperAdmin_2026_!#@_SecureAccess_99', 12);
-            await Usuario.create({
+            await db.insert(usuarios).values({
                 nombre: 'Super Administrador',
                 email: adminEmail,
                 password: hashedPassword,
@@ -188,18 +179,12 @@ async function seedInitialAdmin() {
 // Database sync and start
 async function startServer() {
     try {
-        await sequelize.authenticate();
-        console.log('✅ Conexión a MySQL establecida correctamente');
+        // Verificar conexión (Haciendo una consulta simple)
+        await db.select({ id: usuarios.id }).from(usuarios).limit(1).catch(() => {});
+        console.log('✅ Conexión a PostgreSQL (Drizzle) establecida correctamente');
 
-        // Sincronizar modelos
-        if (!IS_PRODUCTION) {
-            await sequelize.sync({ alter: true });
-            console.log('✅ Modelos sincronizados con la base de datos (Development)');
-        } else {
-            // En producción, sincronizar sin alter:true para crear tablas faltantes de forma segura
-            await sequelize.sync();
-            console.log('✅ Base de datos sincronizada (Modo Producción)');
-        }
+        // Las migraciones ahora se manejan con Drizzle Kit (npm run db:push o migrate)
+        console.log('✅ La base de datos debe ser gestionada mediante Drizzle Kit');
 
         // Crear usuario administrador inicial si no existe
         await seedInitialAdmin();

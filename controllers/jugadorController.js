@@ -1,16 +1,26 @@
-const { Jugador, Categoria, Asistencia, Escuela, Pago } = require('../models');
-const { Op } = require('sequelize');
+const { db } = require('../db');
+const { jugadores, categorias, asistencias, escuelas, pagos } = require('../db/schema.js');
+const { eq, and, desc, asc, ilike, count } = require('drizzle-orm');
 const path = require('path');
 const fs = require('fs');
 
 // Helper: Get escuela filter condition based on user role
 function getEscuelaFilter(user) {
-    // Superadmin can see all schools
-    if (user.rol === 'superadmin') return {};
-    // Users with school assigned - only their school's data
-    if (user.escuela_id) return { escuela_id: user.escuela_id };
-    // User without school - show nothing (must select school first)
-    return { id: -1 };
+    if (user.rol === 'superadmin') return null;
+    if (user.escuela_id) return eq(jugadores.escuela_id, user.escuela_id);
+    return eq(jugadores.id, -1);
+}
+
+function getEdad(fechaNacimiento) {
+    if (!fechaNacimiento) return null;
+    const today = new Date();
+    const birthDate = new Date(fechaNacimiento);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+    }
+    return age;
 }
 
 const jugadorController = {
@@ -39,87 +49,79 @@ const jugadorController = {
         try {
             const { search, categoria_id, page = 1, limit = 20 } = req.query;
             const escuelaFilter = getEscuelaFilter(req.user);
-            const where = { ...escuelaFilter };
+            
+            let jugWhere = [];
+            if (escuelaFilter) jugWhere.push(escuelaFilter);
+            if (search) jugWhere.push(ilike(jugadores.nombre, `%${search}%`));
+            if (categoria_id) jugWhere.push(eq(jugadores.categoria_id, parseInt(categoria_id)));
+
             if (!search) {
                 const fechaActual = new Date();
                 const mesActual = fechaActual.getMonth() + 1;
                 const anioActual = fechaActual.getFullYear();
-                const jugadoresSinPago = await Jugador.findAll({
-                    where: escuelaFilter,
-                    include: [{
-                        model: Escuela,
-                        as: 'escuela',
-                        attributes: ['precio_mensualidad']
-                    }, {
-                        model: Pago,
-                        as: 'pagos',
-                        where: { mes: mesActual, anio: anioActual },
-                        required: false
-                    }]
+                
+                const jugadoresSinPago = await db.query.jugadores.findMany({
+                    where: escuelaFilter ? escuelaFilter : undefined,
+                    with: {
+                        escuela: { columns: { precio_mensualidad: true } },
+                        pagos: {
+                            where: and(eq(pagos.mes, mesActual), eq(pagos.anio, anioActual)),
+                            columns: { id: true }
+                        }
+                    }
                 });
+
                 const pagosFaltantes = jugadoresSinPago.filter(j => !j.pagos || j.pagos.length === 0);
                 if (pagosFaltantes.length > 0) {
                     const nuevosPagos = pagosFaltantes.map(j => ({
                         jugador_id: j.id,
                         mes: mesActual,
                         anio: anioActual,
-                        monto: j.escuela ? (parseFloat(j.escuela.precio_mensualidad) || 0) : 0,
+                        monto: j.escuela && j.escuela.precio_mensualidad ? parseFloat(j.escuela.precio_mensualidad).toFixed(2) : '0.00',
                         estado: 'pendiente'
                     }));
-                    await Pago.bulkCreate(nuevosPagos);
+                    await db.insert(pagos).values(nuevosPagos);
                 }
             }
-            // ==========================================
 
-            if (search) {
-                where.nombre = { [Op.like]: `%${search}%` };
-            }
-
-            if (categoria_id) {
-                where.categoria_id = categoria_id;
-            }
-
-            const offset = (parseInt(page) - 1) * parseInt(limit);
+            const limitVal = parseInt(limit);
+            const offsetVal = (parseInt(page) - 1) * limitVal;
 
             const fechaActualListar = new Date();
             const mesActualListar = fechaActualListar.getMonth() + 1;
             const anioActualListar = fechaActualListar.getFullYear();
 
-            const { count, rows } = await Jugador.findAndCountAll({
-                where,
-                include: [{
-                    model: Categoria,
-                    as: 'categoria',
-                    attributes: ['id', 'nombre']
-                }, {
-                    model: Escuela,
-                    as: 'escuela',
-                    attributes: ['id', 'nombre']
-                }, {
-                    model: Pago,
-                    as: 'pagos',
-                    where: {
-                        mes: mesActualListar,
-                        anio: anioActualListar
-                    },
-                    required: false
-                }],
-                order: [['nombre', 'ASC']],
-                limit: parseInt(limit),
-                offset
+            // Count query
+            const countResult = await db.select({ count: count() })
+                .from(jugadores)
+                .where(jugWhere.length > 0 ? and(...jugWhere) : undefined);
+            
+            const total = countResult[0].count;
+
+            const listaJugadores = await db.query.jugadores.findMany({
+                where: jugWhere.length > 0 ? and(...jugWhere) : undefined,
+                with: {
+                    categoria: { columns: { id: true, nombre: true } },
+                    escuela: { columns: { id: true, nombre: true } },
+                    pagos: {
+                        where: and(eq(pagos.mes, mesActualListar), eq(pagos.anio, anioActualListar))
+                    }
+                },
+                orderBy: [asc(jugadores.nombre)],
+                limit: limitVal,
+                offset: offsetVal
             });
 
-            const jugadores = rows.map(j => {
-                const data = j.toJSON();
-                data.edad = j.getEdad();
-                return data;
-            });
+            const jugadoresConEdad = listaJugadores.map(j => ({
+                ...j,
+                edad: getEdad(j.fecha_nacimiento)
+            }));
 
             res.json({
                 success: true,
-                data: jugadores,
-                total: count,
-                paginas: Math.ceil(count / parseInt(limit)),
+                data: jugadoresConEdad,
+                total: total,
+                paginas: Math.ceil(total / limitVal),
                 pagina_actual: parseInt(page)
             });
         } catch (error) {
@@ -131,29 +133,24 @@ const jugadorController = {
     // GET /api/jugadores/:id
     obtener: async (req, res) => {
         try {
-            const jugador = await Jugador.findByPk(req.params.id, {
-                include: [{
-                    model: Categoria,
-                    as: 'categoria',
-                    attributes: ['id', 'nombre']
-                }, {
-                    model: Escuela,
-                    as: 'escuela',
-                    attributes: ['id', 'nombre', 'logo']
-                }]
+            const id = parseInt(req.params.id);
+            const jugador = await db.query.jugadores.findFirst({
+                where: eq(jugadores.id, id),
+                with: {
+                    categoria: { columns: { id: true, nombre: true } },
+                    escuela: { columns: { id: true, nombre: true, logo: true } }
+                }
             });
 
             if (!jugador) {
                 return res.status(404).json({ success: false, message: 'Jugador no encontrado' });
             }
 
-            // Security: Verify the player belongs to the user's school
             if (req.user.rol !== 'superadmin' && req.user.escuela_id && jugador.escuela_id !== req.user.escuela_id) {
                 return res.status(403).json({ success: false, message: 'No tienes permiso para ver este jugador' });
             }
 
-            const data = jugador.toJSON();
-            data.edad = jugador.getEdad();
+            const data = { ...jugador, edad: getEdad(jugador.fecha_nacimiento) };
 
             res.json({ success: true, data });
         } catch (error) {
@@ -163,7 +160,6 @@ const jugadorController = {
     },
 
     // POST /api/upload-temp
-    // Handles background file uploads
     uploadTemp: async (req, res) => {
         try {
             if (!req.files || req.files.length === 0) {
@@ -188,12 +184,10 @@ const jugadorController = {
         try {
             const jugadorData = { ...req.body };
 
-            // Auto-assign escuela_id from the logged-in user (if not superadmin)
             if (req.user.rol !== 'superadmin' && req.user.escuela_id) {
                 jugadorData.escuela_id = req.user.escuela_id;
             }
 
-            // Handle uploaded files metadata (temp urls)
             if (req.body.foto_url) jugadorData.foto = req.body.foto_url;
             if (req.body.registro_civil_url) jugadorData.registro_civil = req.body.registro_civil_url;
             if (req.body.documento_acudiente_url) jugadorData.documento_acudiente = req.body.documento_acudiente_url;
@@ -202,7 +196,6 @@ const jugadorController = {
             if (req.body.documento_extra3_url) jugadorData.documento_extra3 = req.body.documento_extra3_url;
             if (req.body.documento_extra4_url) jugadorData.documento_extra4 = req.body.documento_extra4_url;
 
-            // Handle uploaded files (max 5) - direct upload alternative
             if (req.files) {
                 if (req.files.foto) jugadorData.foto = '/uploads/fotos/' + req.files.foto[0].filename;
                 if (req.files.registro_civil) jugadorData.registro_civil = '/uploads/documentos/' + req.files.registro_civil[0].filename;
@@ -213,7 +206,6 @@ const jugadorController = {
                 if (req.files.documento_extra4) jugadorData.documento_extra4 = '/uploads/documentos/' + req.files.documento_extra4[0].filename;
             }
 
-            // Handle signatures (base64 from signature_pad)
             if (req.body.firma_base64) {
                 const firmaPath = await guardarFirma(req.body.firma_base64);
                 jugadorData.firma_padre = firmaPath;
@@ -227,23 +219,34 @@ const jugadorController = {
 
             if (!jugadorData.fecha_registro) {
                 jugadorData.fecha_registro = new Date().toISOString().split('T')[0];
+            } else {
+                jugadorData.fecha_registro = new Date(jugadorData.fecha_registro).toISOString().split('T')[0];
+            }
+            if (jugadorData.fecha_nacimiento) {
+                jugadorData.fecha_nacimiento = new Date(jugadorData.fecha_nacimiento).toISOString().split('T')[0];
             }
 
-            const jugador = await Jugador.create(jugadorData);
+            if(jugadorData.categoria_id) jugadorData.categoria_id = parseInt(jugadorData.categoria_id);
+            if(jugadorData.escuela_id) jugadorData.escuela_id = parseInt(jugadorData.escuela_id);
 
-            // Automatically create a payment record for the current month
+            const existe = await db.query.jugadores.findFirst({ where: eq(jugadores.documento, jugadorData.documento) });
+            if (existe) {
+                return res.status(400).json({ success: false, message: 'Ya existe un jugador con este documento' });
+            }
+
+            const insertResult = await db.insert(jugadores).values(jugadorData).returning();
+            const jugador = insertResult[0];
+
             const fechaActual = new Date();
-
-            // Get the escuela to find out the default monthly fee
-            let montoDefault = 0;
+            let montoDefault = '0.00';
             if (jugador.escuela_id) {
-                const esc = await Escuela.findByPk(jugador.escuela_id);
-                if (esc) {
-                    montoDefault = parseFloat(esc.precio_mensualidad) || 0;
+                const esc = await db.query.escuelas.findFirst({ where: eq(escuelas.id, jugador.escuela_id) });
+                if (esc && esc.precio_mensualidad) {
+                    montoDefault = parseFloat(esc.precio_mensualidad).toFixed(2);
                 }
             }
 
-            await Pago.create({
+            await db.insert(pagos).values({
                 jugador_id: jugador.id,
                 mes: fechaActual.getMonth() + 1,
                 anio: fechaActual.getFullYear(),
@@ -254,12 +257,6 @@ const jugadorController = {
             res.status(201).json({ success: true, data: jugador, message: 'Jugador registrado exitosamente' });
         } catch (error) {
             console.error('Error creando jugador:', error);
-            if (error.name === 'SequelizeUniqueConstraintError') {
-                return res.status(400).json({ success: false, message: 'Ya existe un jugador con este documento' });
-            }
-            if (error.name === 'SequelizeValidationError') {
-                return res.status(400).json({ success: false, message: error.errors.map(e => e.message).join(', ') });
-            }
             res.status(500).json({ success: false, message: 'Error en el servidor' });
         }
     },
@@ -267,25 +264,27 @@ const jugadorController = {
     // PUT /api/jugadores/:id
     actualizar: async (req, res) => {
         try {
-            const jugador = await Jugador.findByPk(req.params.id);
+            const id = parseInt(req.params.id);
+            const jugador = await db.query.jugadores.findFirst({ where: eq(jugadores.id, id) });
 
             if (!jugador) {
                 return res.status(404).json({ success: false, message: 'Jugador no encontrado' });
             }
 
-            // Security: Verify the player belongs to the user's school
             if (req.user.rol !== 'superadmin' && req.user.escuela_id && jugador.escuela_id !== req.user.escuela_id) {
                 return res.status(403).json({ success: false, message: 'No tienes permiso para editar este jugador' });
             }
 
             const jugadorData = { ...req.body };
-
-            // Prevent non-superadmin from changing school assignment
             if (req.user.rol !== 'superadmin') {
                 delete jugadorData.escuela_id;
             }
 
-            // Handle background uploads URLs
+            if(jugadorData.documento && jugadorData.documento !== jugador.documento) {
+                const existe = await db.query.jugadores.findFirst({ where: eq(jugadores.documento, jugadorData.documento) });
+                if(existe) return res.status(400).json({ success: false, message: 'Ya existe un jugador con este documento' });
+            }
+
             if (req.body.foto_url && req.body.foto_url !== jugador.foto) {
                 eliminarArchivo(jugador.foto);
                 jugadorData.foto = req.body.foto_url;
@@ -315,39 +314,16 @@ const jugadorController = {
                 jugadorData.documento_extra4 = req.body.documento_extra4_url;
             }
 
-            // Handle uploaded files (max 5) - direct upload alternative
             if (req.files) {
-                if (req.files.foto) {
-                    eliminarArchivo(jugador.foto);
-                    jugadorData.foto = '/uploads/fotos/' + req.files.foto[0].filename;
-                }
-                if (req.files.registro_civil) {
-                    eliminarArchivo(jugador.registro_civil);
-                    jugadorData.registro_civil = '/uploads/documentos/' + req.files.registro_civil[0].filename;
-                }
-                if (req.files.documento_acudiente) {
-                    eliminarArchivo(jugador.documento_acudiente);
-                    jugadorData.documento_acudiente = '/uploads/documentos/' + req.files.documento_acudiente[0].filename;
-                }
-                if (req.files.documento_extra1) {
-                    eliminarArchivo(jugador.documento_extra1);
-                    jugadorData.documento_extra1 = '/uploads/documentos/' + req.files.documento_extra1[0].filename;
-                }
-                if (req.files.documento_extra2) {
-                    eliminarArchivo(jugador.documento_extra2);
-                    jugadorData.documento_extra2 = '/uploads/documentos/' + req.files.documento_extra2[0].filename;
-                }
-                if (req.files.documento_extra3) {
-                    eliminarArchivo(jugador.documento_extra3);
-                    jugadorData.documento_extra3 = '/uploads/documentos/' + req.files.documento_extra3[0].filename;
-                }
-                if (req.files.documento_extra4) {
-                    eliminarArchivo(jugador.documento_extra4);
-                    jugadorData.documento_extra4 = '/uploads/documentos/' + req.files.documento_extra4[0].filename;
-                }
+                if (req.files.foto) { eliminarArchivo(jugador.foto); jugadorData.foto = '/uploads/fotos/' + req.files.foto[0].filename; }
+                if (req.files.registro_civil) { eliminarArchivo(jugador.registro_civil); jugadorData.registro_civil = '/uploads/documentos/' + req.files.registro_civil[0].filename; }
+                if (req.files.documento_acudiente) { eliminarArchivo(jugador.documento_acudiente); jugadorData.documento_acudiente = '/uploads/documentos/' + req.files.documento_acudiente[0].filename; }
+                if (req.files.documento_extra1) { eliminarArchivo(jugador.documento_extra1); jugadorData.documento_extra1 = '/uploads/documentos/' + req.files.documento_extra1[0].filename; }
+                if (req.files.documento_extra2) { eliminarArchivo(jugador.documento_extra2); jugadorData.documento_extra2 = '/uploads/documentos/' + req.files.documento_extra2[0].filename; }
+                if (req.files.documento_extra3) { eliminarArchivo(jugador.documento_extra3); jugadorData.documento_extra3 = '/uploads/documentos/' + req.files.documento_extra3[0].filename; }
+                if (req.files.documento_extra4) { eliminarArchivo(jugador.documento_extra4); jugadorData.documento_extra4 = '/uploads/documentos/' + req.files.documento_extra4[0].filename; }
             }
 
-            // Handle signature update
             if (req.body.firma_base64) {
                 eliminarArchivo(jugador.firma_padre);
                 const firmaPath = await guardarFirma(req.body.firma_base64);
@@ -361,13 +337,15 @@ const jugadorController = {
                 delete jugadorData.firma_entrenador_base64;
             }
 
-            await jugador.update(jugadorData);
-            res.json({ success: true, data: jugador, message: 'Jugador actualizado exitosamente' });
+            if (jugadorData.fecha_registro) jugadorData.fecha_registro = new Date(jugadorData.fecha_registro).toISOString().split('T')[0];
+            if (jugadorData.fecha_nacimiento) jugadorData.fecha_nacimiento = new Date(jugadorData.fecha_nacimiento).toISOString().split('T')[0];
+            if (jugadorData.categoria_id) jugadorData.categoria_id = parseInt(jugadorData.categoria_id);
+            if (jugadorData.escuela_id) jugadorData.escuela_id = parseInt(jugadorData.escuela_id);
+
+            const updateResult = await db.update(jugadores).set(jugadorData).where(eq(jugadores.id, id)).returning();
+            res.json({ success: true, data: updateResult[0], message: 'Jugador actualizado exitosamente' });
         } catch (error) {
             console.error('Error actualizando jugador:', error);
-            if (error.name === 'SequelizeUniqueConstraintError') {
-                return res.status(400).json({ success: false, message: 'Ya existe un jugador con este documento' });
-            }
             res.status(500).json({ success: false, message: 'Error en el servidor' });
         }
     },
@@ -375,18 +353,17 @@ const jugadorController = {
     // DELETE /api/jugadores/:id
     eliminar: async (req, res) => {
         try {
-            const jugador = await Jugador.findByPk(req.params.id);
+            const id = parseInt(req.params.id);
+            const jugador = await db.query.jugadores.findFirst({ where: eq(jugadores.id, id) });
 
             if (!jugador) {
                 return res.status(404).json({ success: false, message: 'Jugador no encontrado' });
             }
 
-            // Security: Verify the player belongs to the user's school
             if (req.user.rol !== 'superadmin' && req.user.escuela_id && jugador.escuela_id !== req.user.escuela_id) {
                 return res.status(403).json({ success: false, message: 'No tienes permiso para eliminar este jugador' });
             }
 
-            // Delete all associated files (max 5 + firma)
             eliminarArchivo(jugador.foto);
             eliminarArchivo(jugador.registro_civil);
             eliminarArchivo(jugador.documento_acudiente);
@@ -397,7 +374,7 @@ const jugadorController = {
             eliminarArchivo(jugador.firma_padre);
             eliminarArchivo(jugador.firma_entrenador);
 
-            await jugador.destroy();
+            await db.delete(jugadores).where(eq(jugadores.id, id));
             res.json({ success: true, message: 'Jugador eliminado exitosamente' });
         } catch (error) {
             console.error('Error eliminando jugador:', error);
@@ -410,37 +387,40 @@ const jugadorController = {
         try {
             const escuelaFilter = getEscuelaFilter(req.user);
 
-            const totalJugadores = await Jugador.count({ where: escuelaFilter });
+            const countResult = await db.select({ count: count() })
+                .from(jugadores)
+                .where(escuelaFilter ? escuelaFilter : undefined);
+            const totalJugadores = countResult[0].count;
 
-            const categorias = await Categoria.findAll({
-                include: [{
-                    model: Jugador,
-                    as: 'jugadores',
-                    attributes: ['id'],
-                    where: Object.keys(escuelaFilter).length > 0 ? escuelaFilter : undefined
-                }]
+            const listaCategorias = await db.query.categorias.findMany({
+                with: {
+                    jugadores: {
+                        where: escuelaFilter ? escuelaFilter : undefined,
+                        columns: { id: true }
+                    }
+                }
             });
 
-            const escuelas = await Escuela.findAll({
-                include: [{
-                    model: Jugador,
-                    as: 'jugadores',
-                    attributes: ['id'],
-                    where: Object.keys(escuelaFilter).length > 0 ? escuelaFilter : undefined
-                }]
+            const listaEscuelas = await db.query.escuelas.findMany({
+                with: {
+                    jugadores: {
+                        where: escuelaFilter ? escuelaFilter : undefined,
+                        columns: { id: true }
+                    }
+                }
             });
 
-            const porCategoria = categorias.map(cat => ({
+            const porCategoria = listaCategorias.map(cat => ({
                 nombre: cat.nombre,
                 total: cat.jugadores ? cat.jugadores.length : 0
             }));
 
-            const porEscuela = escuelas.map(esc => ({
+            const porEscuela = listaEscuelas.map(esc => ({
                 nombre: esc.nombre,
                 total: esc.jugadores ? esc.jugadores.length : 0
             }));
 
-            const totalEscuelas = req.user.rol === 'superadmin' ? escuelas.length : 1;
+            const totalEscuelas = req.user.rol === 'superadmin' ? listaEscuelas.length : 1;
 
             res.json({
                 success: true,

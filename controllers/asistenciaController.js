@@ -1,12 +1,12 @@
-const { Asistencia, Jugador, Categoria } = require('../models');
-const { Op } = require('sequelize');
-const sequelize = require('../config/database');
+const { db } = require('../db');
+const { asistencias, jugadores, categorias } = require('../db/schema.js');
+const { eq, and, desc, asc, inArray } = require('drizzle-orm');
 
 // Helper: Get escuela filter condition for jugador
 function getJugadorEscuelaFilter(user) {
-    if (user.rol === 'superadmin') return {};
-    if (user.escuela_id) return { escuela_id: user.escuela_id };
-    return { id: -1 };
+    if (user.rol === 'superadmin') return null;
+    if (user.escuela_id) return eq(jugadores.escuela_id, user.escuela_id);
+    return eq(jugadores.id, -1);
 }
 
 const asistenciaController = {
@@ -19,34 +19,32 @@ const asistenciaController = {
     listar: async (req, res) => {
         try {
             const { fecha, categoria_id, jugador_id } = req.query;
-            const where = {};
             const escuelaFilter = getJugadorEscuelaFilter(req.user);
 
-            if (fecha) where.fecha = fecha;
-            if (jugador_id) where.jugador_id = jugador_id;
+            let asisWhere = [];
+            if (fecha) asisWhere.push(eq(asistencias.fecha, fecha));
+            if (jugador_id) asisWhere.push(eq(asistencias.jugador_id, parseInt(jugador_id)));
 
-            const jugadorWhere = { ...escuelaFilter };
-            if (categoria_id) jugadorWhere.categoria_id = categoria_id;
+            let jugWhere = [];
+            if (escuelaFilter) jugWhere.push(escuelaFilter);
+            if (categoria_id) jugWhere.push(eq(jugadores.categoria_id, parseInt(categoria_id)));
 
-            const include = [{
-                model: Jugador,
-                as: 'jugador',
-                attributes: ['id', 'nombre', 'foto', 'categoria_id', 'escuela_id'],
-                where: Object.keys(jugadorWhere).length > 0 ? jugadorWhere : undefined,
-                include: [{
-                    model: Categoria,
-                    as: 'categoria',
-                    attributes: ['id', 'nombre']
-                }]
-            }];
-
-            const asistencias = await Asistencia.findAll({
-                where,
-                include,
-                order: [['fecha', 'DESC'], ['created_at', 'DESC']]
+            const listaAsistencias = await db.query.asistencias.findMany({
+                where: asisWhere.length > 0 ? and(...asisWhere) : undefined,
+                with: {
+                    jugador: {
+                        columns: { id: true, nombre: true, foto: true, categoria_id: true, escuela_id: true },
+                        where: jugWhere.length > 0 ? and(...jugWhere) : undefined,
+                        with: { categoria: { columns: { id: true, nombre: true } } }
+                    }
+                },
+                orderBy: [desc(asistencias.fecha), desc(asistencias.createdAt)]
             });
 
-            res.json({ success: true, data: asistencias });
+            // Filter out asistencias where the joined jugador is null (due to conditions)
+            const filteredAsistencias = listaAsistencias.filter(a => a.jugador !== null);
+
+            res.json({ success: true, data: filteredAsistencias });
         } catch (error) {
             console.error('Error listando asistencias:', error);
             res.status(500).json({ success: false, message: 'Error en el servidor' });
@@ -56,25 +54,26 @@ const asistenciaController = {
     // POST /api/asistencia
     registrar: async (req, res) => {
         try {
-            const { fecha, asistencias } = req.body;
+            let { fecha, asistencias: asistenciasList } = req.body;
 
-            if (!fecha || !asistencias || !Array.isArray(asistencias)) {
+            if (!fecha || !asistenciasList || !Array.isArray(asistenciasList)) {
                 return res.status(400).json({
                     success: false,
                     message: 'Fecha y lista de asistencias son requeridas'
                 });
             }
+            
+            fecha = new Date(fecha).toISOString().split('T')[0];
 
             // Security: verify all jugador_ids belong to the user's school
+            const jugadorIds = asistenciasList.map(a => parseInt(a.jugador_id));
             if (req.user.rol !== 'superadmin' && req.user.escuela_id) {
-                const jugadorIds = asistencias.map(a => a.jugador_id);
-                const jugadoresValidos = await Jugador.count({
-                    where: {
-                        id: { [Op.in]: jugadorIds },
-                        escuela_id: req.user.escuela_id
-                    }
+                const checkJugadores = await db.query.jugadores.findMany({
+                    where: and(inArray(jugadores.id, jugadorIds), eq(jugadores.escuela_id, req.user.escuela_id)),
+                    columns: { id: true }
                 });
-                if (jugadoresValidos !== jugadorIds.length) {
+                
+                if (checkJugadores.length !== jugadorIds.length) {
                     return res.status(403).json({
                         success: false,
                         message: 'No puedes registrar asistencia de jugadores de otra escuela'
@@ -82,24 +81,20 @@ const asistenciaController = {
                 }
             }
 
-            // Delete existing records for this date to allow re-registration
-            const jugadorIds = asistencias.map(a => a.jugador_id);
-            await Asistencia.destroy({
-                where: {
-                    fecha,
-                    jugador_id: { [Op.in]: jugadorIds }
-                }
-            });
+            // Delete existing records for this date
+            await db.delete(asistencias).where(and(eq(asistencias.fecha, fecha), inArray(asistencias.jugador_id, jugadorIds)));
 
             // Create new attendance records
-            const registros = asistencias.map(a => ({
-                jugador_id: a.jugador_id,
+            const registros = asistenciasList.map(a => ({
+                jugador_id: parseInt(a.jugador_id),
                 fecha,
                 estado: a.estado || 'presente',
                 observacion: a.observacion || null
             }));
 
-            await Asistencia.bulkCreate(registros);
+            if(registros.length > 0) {
+                await db.insert(asistencias).values(registros);
+            }
 
             res.json({ success: true, message: 'Asistencia registrada exitosamente' });
         } catch (error) {
@@ -111,9 +106,10 @@ const asistenciaController = {
     // GET /api/asistencia/historial/:jugadorId
     historial: async (req, res) => {
         try {
-            const { jugadorId } = req.params;
-            const jugador = await Jugador.findByPk(jugadorId, {
-                include: [{ model: Categoria, as: 'categoria', attributes: ['nombre'] }]
+            const jugadorId = parseInt(req.params.jugadorId);
+            const jugador = await db.query.jugadores.findFirst({
+                where: eq(jugadores.id, jugadorId),
+                with: { categoria: { columns: { nombre: true } } }
             });
 
             if (!jugador) {
@@ -125,16 +121,16 @@ const asistenciaController = {
                 return res.status(403).json({ success: false, message: 'No tienes permiso para ver este jugador' });
             }
 
-            const asistencias = await Asistencia.findAll({
-                where: { jugador_id: jugadorId },
-                order: [['fecha', 'DESC']]
+            const historialAsistencias = await db.query.asistencias.findMany({
+                where: eq(asistencias.jugador_id, jugadorId),
+                orderBy: [desc(asistencias.fecha)]
             });
 
-            const total = asistencias.length;
-            const presentes = asistencias.filter(a => a.estado === 'presente').length;
-            const ausentes = asistencias.filter(a => a.estado === 'ausente').length;
-            const tardanzas = asistencias.filter(a => a.estado === 'tardanza').length;
-            const justificados = asistencias.filter(a => a.estado === 'justificado').length;
+            const total = historialAsistencias.length;
+            const presentes = historialAsistencias.filter(a => a.estado === 'presente').length;
+            const ausentes = historialAsistencias.filter(a => a.estado === 'ausente').length;
+            const tardanzas = historialAsistencias.filter(a => a.estado === 'tardanza').length;
+            const justificados = historialAsistencias.filter(a => a.estado === 'justificado').length;
 
             res.json({
                 success: true,
@@ -145,7 +141,7 @@ const asistenciaController = {
                         categoria: jugador.categoria ? jugador.categoria.nombre : 'Sin categoría'
                     },
                     resumen: { total, presentes, ausentes, tardanzas, justificados },
-                    registros: asistencias
+                    registros: historialAsistencias
                 }
             });
         } catch (error) {
@@ -157,30 +153,29 @@ const asistenciaController = {
     // GET /api/asistencia/por-fecha/:fecha
     porFecha: async (req, res) => {
         try {
-            const { fecha } = req.params;
+            const fecha = req.params.fecha;
             const { categoria_id } = req.query;
             const escuelaFilter = getJugadorEscuelaFilter(req.user);
 
-            const jugadorWhere = { ...escuelaFilter };
-            if (categoria_id) jugadorWhere.categoria_id = categoria_id;
+            let jugWhere = [];
+            if (escuelaFilter) jugWhere.push(escuelaFilter);
+            if (categoria_id) jugWhere.push(eq(jugadores.categoria_id, parseInt(categoria_id)));
 
-            const asistencias = await Asistencia.findAll({
-                where: { fecha },
-                include: [{
-                    model: Jugador,
-                    as: 'jugador',
-                    attributes: ['id', 'nombre', 'foto', 'categoria_id', 'escuela_id'],
-                    where: Object.keys(jugadorWhere).length > 0 ? jugadorWhere : undefined,
-                    include: [{
-                        model: Categoria,
-                        as: 'categoria',
-                        attributes: ['id', 'nombre']
-                    }]
-                }],
-                order: [[{ model: Jugador, as: 'jugador' }, 'nombre', 'ASC']]
+            const listaAsistencias = await db.query.asistencias.findMany({
+                where: eq(asistencias.fecha, fecha),
+                with: {
+                    jugador: {
+                        columns: { id: true, nombre: true, foto: true, categoria_id: true, escuela_id: true },
+                        where: jugWhere.length > 0 ? and(...jugWhere) : undefined,
+                        with: { categoria: { columns: { id: true, nombre: true } } }
+                    }
+                }
             });
+            
+            const filteredAsistencias = listaAsistencias.filter(a => a.jugador !== null);
+            filteredAsistencias.sort((a, b) => a.jugador.nombre.localeCompare(b.jugador.nombre));
 
-            res.json({ success: true, data: asistencias });
+            res.json({ success: true, data: filteredAsistencias });
         } catch (error) {
             console.error('Error obteniendo asistencia por fecha:', error);
             res.status(500).json({ success: false, message: 'Error en el servidor' });
@@ -190,8 +185,10 @@ const asistenciaController = {
     // DELETE /api/asistencia/:id
     eliminar: async (req, res) => {
         try {
-            const asistencia = await Asistencia.findByPk(req.params.id, {
-                include: [{ model: Jugador, as: 'jugador', attributes: ['escuela_id'] }]
+            const id = parseInt(req.params.id);
+            const asistencia = await db.query.asistencias.findFirst({
+                where: eq(asistencias.id, id),
+                with: { jugador: { columns: { escuela_id: true } } }
             });
             if (!asistencia) {
                 return res.status(404).json({ success: false, message: 'Registro no encontrado' });
@@ -203,7 +200,7 @@ const asistenciaController = {
                 return res.status(403).json({ success: false, message: 'No tienes permiso' });
             }
 
-            await asistencia.destroy();
+            await db.delete(asistencias).where(eq(asistencias.id, id));
             res.json({ success: true, message: 'Registro eliminado' });
         } catch (error) {
             console.error('Error eliminando asistencia:', error);

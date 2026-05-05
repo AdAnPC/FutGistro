@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
-    "seed": "node seeders/seed.js"
+    "seed": "node seeders/seed.js",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
@@ -14,19 +17,20 @@
     "connect-redis": "^9.0.0",
     "cors": "^2.8.6",
     "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.45.2",
     "express": "^4.21.0",
-    "express-mysql-session": "^3.0.3",
     "express-rate-limit": "^8.3.1",
     "express-session": "^1.18.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.1",
     "multer": "^1.4.5-lts.1",
-    "mysql2": "^3.11.0",
-    "redis": "^5.11.0",
-    "sequelize": "^6.37.3"
+    "postgres": "^3.4.9",
+    "redis": "^5.11.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "drizzle-kit": "^0.31.10",
+    "nodemon": "^3.1.4",
+    "tsx": "^4.21.0"
   }
 }
