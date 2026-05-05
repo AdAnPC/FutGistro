@@ -11,7 +11,7 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const morgan = require('morgan');
-const MySQLStore = require('express-mysql-session')(session);
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
