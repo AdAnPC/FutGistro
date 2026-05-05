@@ -6,6 +6,7 @@ const os = require('os');
 const { db } = require('./db');
 const { usuarios } = require('./db/schema.js');
 const { eq } = require('drizzle-orm');
+const { migrate } = require('drizzle-orm/postgres-js/migrator');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
@@ -183,8 +184,10 @@ async function startServer() {
         await db.select({ id: usuarios.id }).from(usuarios).limit(1).catch(() => {});
         console.log('✅ Conexión a PostgreSQL (Drizzle) establecida correctamente');
 
-        // Las migraciones ahora se manejan con Drizzle Kit (npm run db:push o migrate)
-        console.log('✅ La base de datos debe ser gestionada mediante Drizzle Kit');
+        // Ejecutar migraciones automáticamente
+        console.log('🔄 Sincronizando estructura de la base de datos...');
+        await migrate(db, { migrationsFolder: './drizzle' });
+        console.log('✅ Base de datos sincronizada con Drizzle');
 
         // Crear usuario administrador inicial si no existe
         await seedInitialAdmin();
