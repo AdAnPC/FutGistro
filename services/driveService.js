@@ -8,42 +8,39 @@ const driveService = {
         try {
             let keyData;
             
-            if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+            // 1. Intentar cargar desde el sistema de "Secret Files" de Render (RECOMENDADO)
+            const renderSecretPath = '/etc/secrets/google-service-account.json';
+            const localConfigPath = path.join(__dirname, '../config/google-service-account.json');
+
+            if (fs.existsSync(renderSecretPath)) {
+                console.log("✅ Cargando llave desde Secret Files de Render.");
+                keyData = JSON.parse(fs.readFileSync(renderSecretPath, 'utf8'));
+            } 
+            // 2. Intentar cargar desde Variable de Entorno (Si no hay Secret File)
+            else if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
                 console.log("✅ Usando variable de entorno (Render).");
                 const rawValue = process.env.GOOGLE_SERVICE_ACCOUNT_JSON.trim();
-                let jsonString;
-
                 try {
-                    // Intento 1: ¿Es JSON normal?
                     keyData = JSON.parse(rawValue);
-                    console.log("✅ JSON normal cargado correctamente.");
-                } catch (e1) {
-                    // Intento 2: ¿Es Base64?
+                } catch (e) {
                     console.log("ℹ️ JSON normal falló. Intentando decodificar Base64...");
                     try {
-                        jsonString = Buffer.from(rawValue, 'base64').toString('utf8');
+                        const jsonString = Buffer.from(rawValue, 'base64').toString('utf8');
                         keyData = JSON.parse(jsonString);
-                        console.log("✅ Base64 decodificado y JSON cargado con éxito.");
                     } catch (e2) {
-                        console.error("❌ Ambos métodos fallaron (JSON y Base64).");
-                        throw new Error(`Error en formato de GOOGLE_SERVICE_ACCOUNT_JSON: ${e1.message}`);
+                        throw new Error(`Error fatal en GOOGLE_SERVICE_ACCOUNT_JSON: ${e.message}`);
                     }
                 }
+            } 
+            // 3. Fallback a archivo local (Desarrollo)
+            else if (fs.existsSync(localConfigPath)) {
+                console.log(`✅ Usando archivo local en: ${localConfigPath}`);
+                keyData = JSON.parse(fs.readFileSync(localConfigPath, 'utf8'));
             } else {
-                const configPath = path.join(__dirname, '../config/google-service-account.json');
-                console.log(`ℹ️ Buscando archivo en: ${configPath}`);
-                
-                if (fs.existsSync(configPath)) {
-                    // Leemos el archivo y limpiamos posibles errores de escape
-                    const rawContent = fs.readFileSync(configPath, 'utf8');
-                    keyData = JSON.parse(rawContent);
-                    console.log("✅ Archivo encontrado y cargado.");
-                } else {
-                    throw new Error(`No se encontró el archivo en: ${configPath}`);
-                }
+                throw new Error('No se encontró la configuración de Google Drive en ninguna ubicación (Secret File, ENV o Local).');
             }
 
-            // LIMPIEZA DE EMERGENCIA: Si la llave tiene "\\n" literales, los convertimos a saltos de línea reales
+            // LIMPIEZA: Asegurarnos de que la private_key tenga saltos de línea reales
             const cleanKey = keyData.private_key.replace(/\\n/g, '\n');
 
             const auth = new google.auth.JWT(
