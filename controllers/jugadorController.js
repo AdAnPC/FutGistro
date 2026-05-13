@@ -27,7 +27,10 @@ const jugadorController = {
     // GET /api/jugadores
     listar: catchAsync(async (req, res) => {
         const result = await jugadorService.listPlayers(req.query, req.user);
-        response.success(res, result);
+        res.status(200).json({
+            success: true,
+            ...result
+        });
     }),
 
     // GET /api/jugadores/:id
