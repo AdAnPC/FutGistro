@@ -281,7 +281,7 @@ router.post('/restaurar', upload.single('backupFile'), async (req, res) => {
         const isIsoDate = (str) => {
             if (typeof str !== 'string') return false;
             // Verifica formato ISO 8601 ej: 2024-05-12T12:30:00.000Z o 2024-05-12T12:30:00Z
-            return /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$/.test(str);
+            return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/.test(str);
         };
 
         // Importar datos
