@@ -12,15 +12,17 @@ const driveService = {
             const renderSecretPath = '/etc/secrets/google-service-account.json';
             const localConfigPath = path.join(__dirname, '../config/google-service-account.json');
 
-            console.log(`🔍 Buscando Secret File en: ${renderSecretPath}`);
+            console.log(`🔍 Buscando credenciales en: ${renderSecretPath}`);
+            
             if (fs.existsSync(renderSecretPath)) {
-                console.log("✅ Secret File encontrado en Render.");
+                console.log("✅ Cargando desde Secret Files de Render.");
                 keyData = JSON.parse(fs.readFileSync(renderSecretPath, 'utf8'));
             } 
-            else {
-                console.log("ℹ️ No se encontró Secret File. Probando otros métodos...");
+            else if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+                console.log("✅ Usando variable de entorno (Render).");
                 const rawValue = process.env.GOOGLE_SERVICE_ACCOUNT_JSON.trim();
                 try {
+                    // Intentamos JSON normal
                     keyData = JSON.parse(rawValue);
                 } catch (e) {
                     console.log("ℹ️ JSON normal falló. Intentando decodificar Base64...");
@@ -28,16 +30,16 @@ const driveService = {
                         const jsonString = Buffer.from(rawValue, 'base64').toString('utf8');
                         keyData = JSON.parse(jsonString);
                     } catch (e2) {
-                        throw new Error(`Error fatal en GOOGLE_SERVICE_ACCOUNT_JSON: ${e.message}`);
+                        throw new Error(`Error en formato de GOOGLE_SERVICE_ACCOUNT_JSON: ${e.message}`);
                     }
                 }
             } 
-            // 3. Fallback a archivo local (Desarrollo)
             else if (fs.existsSync(localConfigPath)) {
                 console.log(`✅ Usando archivo local en: ${localConfigPath}`);
                 keyData = JSON.parse(fs.readFileSync(localConfigPath, 'utf8'));
-            } else {
-                throw new Error('No se encontró la configuración de Google Drive en ninguna ubicación (Secret File, ENV o Local).');
+            } 
+            else {
+                throw new Error('No se encontró configuración de Google Drive en Secret Files, ENV ni Local.');
             }
 
             // LIMPIEZA: Asegurarnos de que la private_key tenga saltos de línea reales
@@ -50,14 +52,9 @@ const driveService = {
                 SCOPES
             );
 
-            console.log(`🚀 Subiendo a Drive con cuenta: ${keyData.client_email}`);
-            
             const drive = google.drive({ version: 'v3', auth });
 
-            const fileMetadata = {
-                name: fileName,
-            };
-
+            const fileMetadata = { name: fileName };
             const media = {
                 mimeType: mimeType,
                 body: fs.createReadStream(filePath),
@@ -71,7 +68,6 @@ const driveService = {
 
             const fileId = response.data.id;
 
-            // Dar permisos de lectura a cualquiera con el link
             await drive.permissions.create({
                 fileId: fileId,
                 requestBody: {
@@ -80,13 +76,11 @@ const driveService = {
                 },
             });
 
-            // Retornar el link directo
             return `https://lh3.googleusercontent.com/d/${fileId}`;
         } catch (error) {
             console.error('Error subiendo a Google Drive:', error);
             throw error;
         } finally {
-            // Opcional: Borrar archivo local después de subir
             if (fs.existsSync(filePath)) {
                 fs.unlinkSync(filePath);
             }
