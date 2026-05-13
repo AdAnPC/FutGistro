@@ -2,6 +2,7 @@ const { db } = require('../db');
 const { escuelas, jugadores } = require('../db/schema.js');
 const { eq, asc } = require('drizzle-orm');
 const fileService = require('./fileService');
+const { processDriveUrl } = require('../utils/drive');
 
 const escuelaService = {
     listSchools: async () => {
@@ -53,7 +54,7 @@ const escuelaService = {
         if (file) {
             dataToCreate.logo = '/uploads/logos/' + file.filename;
         } else if (logo_url) {
-            dataToCreate.logo = escuelaService.processLogoUrl(logo_url);
+            dataToCreate.logo = processDriveUrl(logo_url);
         }
 
         const result = await db.insert(escuelas).values(dataToCreate).returning();
@@ -92,34 +93,11 @@ const escuelaService = {
             dataToUpdate.logo = '/uploads/logos/' + file.filename;
         } else if (logo_url) {
             // Si hay una URL de logo y no se subió archivo, usamos la URL
-            dataToUpdate.logo = escuelaService.processLogoUrl(logo_url);
+            dataToUpdate.logo = processDriveUrl(logo_url);
         }
 
         const result = await db.update(escuelas).set(dataToUpdate).where(eq(escuelas.id, id)).returning();
         return result[0];
-    },
-
-    processLogoUrl: (url) => {
-        if (!url) return null;
-        
-        // Convertir links de Google Drive a links directos de imagen
-        if (url.includes('drive.google.com')) {
-            let fileId = '';
-            
-            // Caso 1: /file/d/ID/view
-            const match1 = url.match(/\/file\/d\/([^\/]+)/);
-            if (match1) fileId = match1[1];
-            
-            // Caso 2: ?id=ID
-            const match2 = url.match(/[?&]id=([^&]+)/);
-            if (match2) fileId = match2[1];
-            
-            if (fileId) {
-                return `https://lh3.googleusercontent.com/d/${fileId}`;
-            }
-        }
-        
-        return url;
     },
 
     deleteSchool: async (id) => {

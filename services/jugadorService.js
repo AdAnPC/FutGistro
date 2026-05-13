@@ -2,6 +2,7 @@ const { db } = require('../db');
 const { jugadores, categorias, asistencias, escuelas, pagos } = require('../db/schema.js');
 const { eq, and, ilike, count, asc } = require('drizzle-orm');
 const fileService = require('./fileService');
+const { processDriveUrl } = require('../utils/drive');
 
 const jugadorService = {
     getEdad: (fechaNacimiento) => {
@@ -142,7 +143,7 @@ const jugadorService = {
         const urlFields = ['foto', 'registro_civil', 'documento_acudiente', 'documento_extra1', 'documento_extra2', 'documento_extra3', 'documento_extra4'];
         urlFields.forEach(field => {
             if (data[`${field}_url`]) {
-                jugadorData[field] = data[`${field}_url`];
+                jugadorData[field] = processDriveUrl(data[`${field}_url`]);
                 delete jugadorData[`${field}_url`];
             }
         });
@@ -238,7 +239,7 @@ const jugadorService = {
             const urlKey = `${field}_url`;
             if (data[urlKey] && data[urlKey] !== jugador[field]) {
                 fileService.deleteFile(jugador[field]);
-                jugadorData[field] = data[urlKey];
+                jugadorData[field] = processDriveUrl(data[urlKey]);
                 delete jugadorData[urlKey];
             }
         });

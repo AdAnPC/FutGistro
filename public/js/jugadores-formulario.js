@@ -196,6 +196,9 @@ async function buildPage() {
                           <div id="${s.preview}"></div>
                         </div>
                         <input type="file" id="${s.id}" name="${s.id}" accept="image/*,.pdf" style="display:none" data-slot="${s.slot}">
+                        <div class="mt-2">
+                          <input type="text" id="${s.id}_url" name="${s.id}_url" class="form-control-custom" placeholder="URL de Drive..." style="font-size:11px;padding:4px">
+                        </div>
                       </div>`).join('')}
                   </div>
                   <button type="button" class="btn-primary-custom w-100 mt-4" id="btn-next-4">Continuar a Firma Digital <i class="bi bi-arrow-down-circle ms-1"></i></button>
@@ -277,6 +280,34 @@ async function buildPage() {
     });
 
     updateFileCount();
+    
+    // Live preview para URLs de Drive en slots
+    document.querySelectorAll('input[id$="_url"]').forEach(input => {
+        input.addEventListener('input', function() {
+            const fieldId = this.id.replace('_url', '');
+            const previewId = {
+                'foto': 'fotoPreview',
+                'documento_extra2': 'docExtra2Preview',
+                'documento_extra4': 'docExtra4Preview',
+                'registro_civil': 'registroCivilPreview',
+                'documento_acudiente': 'docAcudientePreview',
+                'documento_extra1': 'docExtra1Preview',
+                'documento_extra3': 'docExtra3Preview'
+            }[fieldId];
+            
+            const url = this.value.trim();
+            const previewEl = document.getElementById(previewId);
+            if (url && previewEl) {
+                let displayUrl = url;
+                if (url.includes('drive.google.com')) {
+                    const fileId = url.match(/\/file\/d\/([^\/?]+)/)?.[1] || url.match(/[?&]id=([^&]+)/)?.[1];
+                    if (fileId) displayUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
+                }
+                previewEl.innerHTML = `<img src="${displayUrl}" class="preview-img" style="max-height:80px" onerror="this.src='/icons/fut.jpeg'">`;
+                updateFileCount();
+            }
+        });
+    });
 
     if (isEditing) showAllSections();
     else           document.getElementById('btn-next-1').style.display = 'block';
