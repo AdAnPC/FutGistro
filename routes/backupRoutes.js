@@ -14,6 +14,7 @@ const { authMiddleware, isSuperAdmin } = require('../middleware/authMiddleware')
 const { generarBackup, listarBackups, obtenerBackup } = require('../services/backupService');
 const { db, client } = require('../db');
 const schema = require('../db/schema');
+const { sql } = require('drizzle-orm');
 
 // Todas las rutas requieren superadmin
 router.use(authMiddleware, isSuperAdmin);
@@ -301,8 +302,21 @@ router.post('/restaurar', upload.single('backupFile'), async (req, res) => {
                     return nuevaFila;
                 });
                 
-                await db.insert(tablaSchema).values(lote).onConflictDoNothing();
-                totalRestaurados += lote.length;
+                if (lote.length > 0) {
+                    const setClause = {};
+                    for (const key in lote[0]) {
+                        if (key !== 'id') {
+                            const dbColName = tablaSchema[key]?.name || key;
+                            setClause[key] = sql.raw(`excluded."${dbColName}"`);
+                        }
+                    }
+
+                    await db.insert(tablaSchema).values(lote).onConflictDoUpdate({
+                        target: tablaSchema.id,
+                        set: setClause
+                    });
+                    totalRestaurados += lote.length;
+                }
             }
         }
 
