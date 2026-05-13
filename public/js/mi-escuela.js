@@ -99,6 +99,21 @@ async function buildPage() {
         document.getElementById('logo').click();
     });
     document.getElementById('logo').addEventListener('change', previewLogo);
+    document.getElementById('logo_url').addEventListener('input', function() {
+        const url = this.value.trim();
+        if (url) {
+            document.getElementById('logoIcon').style.display = 'none';
+            document.getElementById('logoText').style.display = 'none';
+            
+            let displayUrl = url;
+            if (url.includes('drive.google.com')) {
+                const fileId = url.match(/\/file\/d\/([^\/?]+)/)?.[1] || url.match(/[?&]id=([^&]+)/)?.[1];
+                if (fileId) displayUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
+            }
+            
+            document.getElementById('logoPreview').innerHTML = `<img src="${displayUrl}" style="max-width:100%;border-radius:8px;" onerror="this.src='/icons/fut.jpeg';console.error('Error cargando imagen de URL externa')">`;
+        }
+    });
     document.getElementById('miEscuelaForm').addEventListener('submit', handleSubmit);
 
     // Inicializar selectores de ubicación
