@@ -10,22 +10,17 @@ const auth = new google.auth.GoogleAuth({
     scopes: SCOPES,
 });
 
-const drive = google.drive({ version: 'v3', auth });
-
 const driveService = {
-    /**
-     * Sube un archivo a Google Drive y lo hace público para lectura
-     * @param {string} filePath Ruta local del archivo
-     * @param {string} fileName Nombre con el que se guardará en Drive
-     * @param {string} mimeType Tipo de archivo
-     * @returns {Promise<string>} URL directa de la imagen (lh3)
-     */
     uploadFile: async (filePath, fileName, mimeType) => {
         try {
+            console.log(`🚀 Iniciando subida a Drive: ${fileName} (${mimeType})`);
+            
+            // Forzar obtención de cliente autenticado
+            const authClient = await auth.getClient();
+            const drive = google.drive({ version: 'v3', auth: authClient });
+
             const fileMetadata = {
                 name: fileName,
-                // Si tienes un ID de carpeta, descomenta la línea de abajo
-                // parents: ['ID_DE_TU_CARPETA_COMPARTIDA']
             };
 
             const media = {
@@ -34,7 +29,7 @@ const driveService = {
             };
 
             const response = await drive.files.create({
-                resource: fileMetadata,
+                requestBody: fileMetadata,
                 media: media,
                 fields: 'id',
             });
