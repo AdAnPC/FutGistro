@@ -1,21 +1,31 @@
 const { google } = require('googleapis');
-const path = require('path');
 const fs = require('fs');
-
-const KEY_DATA = require('../config/google-service-account.json');
 const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
-
-const auth = new google.auth.JWT(
-    KEY_DATA.client_email,
-    null,
-    KEY_DATA.private_key,
-    SCOPES
-);
 
 const driveService = {
     uploadFile: async (filePath, fileName, mimeType) => {
         try {
-            console.log(`🚀 Intentando subir a Drive con: ${KEY_DATA.client_email}`);
+            let keyData;
+            try {
+                keyData = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+            } catch (e) {
+                // Fallback a archivo local si existe (para desarrollo local)
+                try {
+                    const path = require('path');
+                    keyData = require('../config/google-service-account.json');
+                } catch (e2) {
+                    throw new Error('No se encontró la configuración de Google Service Account (Variable de entorno o archivo)');
+                }
+            }
+
+            const auth = new google.auth.JWT(
+                keyData.client_email,
+                null,
+                keyData.private_key,
+                SCOPES
+            );
+
+            console.log(`🚀 Intentando subir a Drive con: ${keyData.client_email}`);
             
             const drive = google.drive({ version: 'v3', auth });
 
