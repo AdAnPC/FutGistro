@@ -8,6 +8,8 @@ const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const morgan = require('morgan');
 const { migrate } = require('drizzle-orm/postgres-js/migrator');
+const cron = require('node-cron');
+const { generarBackup } = require('./services/backupService');
 
 const { db } = require('./db');
 const { usuarios } = require('./db/schema.js');
@@ -163,6 +165,20 @@ async function startServer() {
         console.log('✅ Base de datos sincronizada con Drizzle');
 
         await seedInitialAdmin();
+
+        // ―― Backup automático diario a las 2:00 AM ―――――――――――――――――――――――――――
+        cron.schedule('0 2 * * *', async () => {
+            console.log('📅 Ejecutando backup automático programado...');
+            try {
+                const resultado = await generarBackup('automatico');
+                console.log(`✅ Backup automático completado: ${resultado.totalRegistros} registros, ${resultado.tamanoKb} KB`);
+            } catch (err) {
+                console.error('❌ Error en backup automático:', err.message);
+            }
+        }, {
+            timezone: 'America/Bogota' // Hora Colombia
+        });
+        console.log('📅 Backup automático programado: todos los días a las 2:00 AM (Colombia)');
 
         const localIP = getLocalIP();
         app.listen(PORT, HOST, () => {

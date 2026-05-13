@@ -161,6 +161,16 @@ const partidos = pgTable('partidos', {
     updatedAt: timestamp('updated_at').defaultNow().notNull()
 });
 
+// Backups automáticos del sistema
+const system_backups = pgTable('system_backups', {
+    id: serial('id').primaryKey(),
+    datos: text('datos').notNull(),           // JSON completo del backup
+    total_registros: integer('total_registros').notNull().default(0),
+    tamano_kb: integer('tamano_kb').notNull().default(0),
+    tipo: varchar('tipo', { length: 20 }).notNull().default('automatico'), // 'automatico' | 'manual'
+    createdAt: timestamp('created_at').defaultNow().notNull()
+});
+
 // Relations
 const escuelasRelations = relations(escuelas, ({ many }) => ({
     usuarios: many(usuarios),
@@ -261,6 +271,7 @@ module.exports = {
     torneos,
     torneo_participantes,
     partidos,
+    system_backups,
     escuelasRelations,
     categoriasRelations,
     jugadoresRelations,

@@ -33,15 +33,15 @@ const ORDEN = [
 ];
 
 const TABLAS_SCHEMA = {
-    escuelas:             schema.escuelas,
-    categorias:           schema.categorias,
-    usuarios:             schema.usuarios,
-    jugadores:            schema.jugadores,
-    asistencias:          schema.asistencias,
-    pagos:                schema.pagos,
-    torneos:              schema.torneos,
+    escuelas: schema.escuelas,
+    categorias: schema.categorias,
+    usuarios: schema.usuarios,
+    jugadores: schema.jugadores,
+    asistencias: schema.asistencias,
+    pagos: schema.pagos,
+    torneos: schema.torneos,
     torneo_participantes: schema.torneo_participantes,
-    partidos:             schema.partidos,
+    partidos: schema.partidos,
 };
 
 async function restaurar() {

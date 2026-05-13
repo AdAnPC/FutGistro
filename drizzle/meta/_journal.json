@@ -15,6 +15,13 @@
       "when": 1777949779794,
       "tag": "0001_volatile_masked_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778631883153,
+      "tag": "0002_hot_meteorite",
+      "breakpoints": true
     }
   ]
 }
