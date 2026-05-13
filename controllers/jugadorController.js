@@ -62,7 +62,7 @@ const jugadorController = {
         else if (file.fieldname === 'firma_padre' || file.fieldname === 'firma_entrenador') folder = 'firmas';
 
         const filePath = `/uploads/${folder}/${file.filename}`;
-        response.success(res, { url: filePath, fieldname: file.fieldname });
+        res.status(200).json({ success: true, url: filePath, fieldname: file.fieldname });
     }),
 
     // POST /api/jugadores
