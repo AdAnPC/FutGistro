@@ -278,11 +278,7 @@ router.post('/restaurar', upload.single('backupFile'), async (req, res) => {
 
         let totalRestaurados = 0;
 
-        const isIsoDate = (str) => {
-            if (typeof str !== 'string') return false;
-            // Verifica formato ISO 8601 ej: 2024-05-12T12:30:00.000Z o 2024-05-12T12:30:00Z
-            return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/.test(str);
-        };
+
 
         // Importar datos
         for (const nombre of ORDEN) {
@@ -297,7 +293,8 @@ router.post('/restaurar', upload.single('backupFile'), async (req, res) => {
                 const lote = datos.slice(i, i + LOTE).map(fila => {
                     const nuevaFila = { ...fila };
                     for (const key in nuevaFila) {
-                        if (isIsoDate(nuevaFila[key])) {
+                        // Drizzle requires Date objects only for timestamp fields
+                        if ((key === 'createdAt' || key === 'updatedAt' || key === 'created_at' || key === 'updated_at') && nuevaFila[key]) {
                             nuevaFila[key] = new Date(nuevaFila[key]);
                         }
                     }
