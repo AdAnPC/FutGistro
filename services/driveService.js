@@ -16,17 +16,22 @@ const driveService = {
                 console.log(`ℹ️ Buscando archivo en: ${configPath}`);
                 
                 if (fs.existsSync(configPath)) {
-                    keyData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-                    console.log("✅ Archivo encontrado y cargado correctamente.");
+                    // Leemos el archivo y limpiamos posibles errores de escape
+                    const rawContent = fs.readFileSync(configPath, 'utf8');
+                    keyData = JSON.parse(rawContent);
+                    console.log("✅ Archivo encontrado y cargado.");
                 } else {
                     throw new Error(`No se encontró el archivo en: ${configPath}`);
                 }
             }
 
+            // LIMPIEZA DE EMERGENCIA: Si la llave tiene "\\n" literales, los convertimos a saltos de línea reales
+            const cleanKey = keyData.private_key.replace(/\\n/g, '\n');
+
             const auth = new google.auth.JWT(
                 keyData.client_email,
                 null,
-                keyData.private_key,
+                cleanKey,
                 SCOPES
             );
 
