@@ -12,13 +12,13 @@ const driveService = {
             const renderSecretPath = '/etc/secrets/google-service-account.json';
             const localConfigPath = path.join(__dirname, '../config/google-service-account.json');
 
+            console.log(`🔍 Buscando Secret File en: ${renderSecretPath}`);
             if (fs.existsSync(renderSecretPath)) {
-                console.log("✅ Cargando llave desde Secret Files de Render.");
+                console.log("✅ Secret File encontrado en Render.");
                 keyData = JSON.parse(fs.readFileSync(renderSecretPath, 'utf8'));
             } 
-            // 2. Intentar cargar desde Variable de Entorno (Si no hay Secret File)
-            else if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-                console.log("✅ Usando variable de entorno (Render).");
+            else {
+                console.log("ℹ️ No se encontró Secret File. Probando otros métodos...");
                 const rawValue = process.env.GOOGLE_SERVICE_ACCOUNT_JSON.trim();
                 try {
                     keyData = JSON.parse(rawValue);
