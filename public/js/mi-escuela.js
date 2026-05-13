@@ -108,10 +108,13 @@ async function buildPage() {
             let displayUrl = url;
             if (url.includes('drive.google.com')) {
                 const fileId = url.match(/\/file\/d\/([^\/?]+)/)?.[1] || url.match(/[?&]id=([^&]+)/)?.[1];
-                if (fileId) displayUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
+                if (fileId) {
+                    displayUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
+                    console.log('Detectado Google Drive ID:', fileId, '->', displayUrl);
+                }
             }
             
-            document.getElementById('logoPreview').innerHTML = `<img src="${displayUrl}" style="max-width:100%;border-radius:8px;" onerror="this.src='/icons/fut.jpeg';console.error('Error cargando imagen de URL externa')">`;
+            document.getElementById('logoPreview').innerHTML = `<img src="${displayUrl}" style="max-width:100%;border-radius:8px;" onerror="this.src='/icons/fut.jpeg';console.error('Error cargando imagen de URL:', this.src)">`;
         }
     });
     document.getElementById('miEscuelaForm').addEventListener('submit', handleSubmit);
