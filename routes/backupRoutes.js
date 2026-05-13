@@ -8,8 +8,12 @@
 
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 const { authMiddleware, isSuperAdmin } = require('../middleware/authMiddleware');
 const { generarBackup, listarBackups, obtenerBackup } = require('../services/backupService');
+const { db, client } = require('../db');
+const schema = require('../db/schema');
 
 // Todas las rutas requieren superadmin
 router.use(authMiddleware, isSuperAdmin);
@@ -65,9 +69,19 @@ router.get('/', async (req, res) => {
                 color: white; padding: 12px 24px; border-radius: 10px;
                 text-decoration: none; font-weight: 600; font-size: 14px;
                 display: inline-flex; align-items: center; gap: 8px;
-                transition: all 0.2s; white-space: nowrap;
+                transition: all 0.2s; white-space: nowrap; border: none; cursor: pointer;
             }
             .btn-now:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(34,197,94,0.4); }
+            
+            .btn-upload {
+                background: linear-gradient(135deg, #3b82f6, #2563eb);
+                color: white; padding: 12px 24px; border-radius: 10px;
+                text-decoration: none; font-weight: 600; font-size: 14px;
+                display: inline-flex; align-items: center; gap: 8px;
+                transition: all 0.2s; white-space: nowrap; border: none; cursor: pointer;
+            }
+            .btn-upload:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(59,130,246,0.4); }
+
             .info-box {
                 background: #1e293b; border: 1px solid #334155; border-radius: 12px;
                 padding: 16px 20px; margin-bottom: 24px; font-size: 13px; color: #94a3b8; line-height: 1.8;
@@ -98,9 +112,19 @@ router.get('/', async (req, res) => {
                     <h1>🗄️ Backups de Base de Datos</h1>
                     <p class="subtitle">Historial de copias de seguridad automáticas y manuales</p>
                 </div>
-                <a href="/backup/exportar" class="btn-now" id="btnNow" onclick="this.textContent='⏳ Generando...'">
-                    ⬇️ Backup Manual Ahora
-                </a>
+                <div style="display:flex; gap:12px;">
+                    <a href="/backup/exportar" class="btn-now" id="btnNow" onclick="this.textContent='⏳ Generando...'">
+                        ⬇️ Descargar Backup
+                    </a>
+                    <button class="btn-upload" onclick="document.getElementById('backupFile').click()">
+                        ⬆️ Cargar Backup JSON
+                    </button>
+                    <input type="file" id="backupFile" accept=".json" style="display:none;" onchange="subirBackup(this)">
+                </div>
+            </div>
+
+            <div id="uploadStatus" style="display:none; background:#1e3a8a; border:1px solid #3b82f6; border-radius:8px; padding:12px; margin-bottom:20px; font-size:14px; color:#bfdbfe; font-weight:600;">
+                ⏳ Subiendo y restaurando backup... Esto puede tomar un minuto.
             </div>
 
             <div class="cron-badge">
@@ -129,6 +153,45 @@ router.get('/', async (req, res) => {
 
             <a href="/dashboard" class="back">← Volver al Dashboard</a>
         </div>
+        
+        <script>
+            async function subirBackup(input) {
+                if (!input.files || input.files.length === 0) return;
+                
+                const file = input.files[0];
+                if (!confirm(\`¿Estás seguro de que quieres restaurar la base de datos usando el archivo "\${file.name}"?\\n\\nEsto agregará los registros del archivo a la base de datos actual.\`)) {
+                    input.value = '';
+                    return;
+                }
+                
+                document.getElementById('uploadStatus').style.display = 'block';
+                
+                const formData = new FormData();
+                formData.append('backupFile', file);
+                
+                try {
+                    const res = await fetch('/backup/restaurar', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const data = await res.json();
+                    
+                    if (data.success) {
+                        alert('✅ Restauración completada con éxito. Se importaron ' + data.registros + ' registros.');
+                        window.location.reload();
+                    } else {
+                        alert('❌ Error: ' + data.message);
+                        document.getElementById('uploadStatus').style.display = 'none';
+                    }
+                } catch (err) {
+                    alert('❌ Error de conexión al subir el archivo.');
+                    document.getElementById('uploadStatus').style.display = 'none';
+                }
+                
+                input.value = '';
+            }
+        </script>
     </body>
     </html>
     `);
@@ -180,6 +243,78 @@ router.get('/descargar/:id', async (req, res) => {
     } catch (err) {
         console.error('❌ Error descargando backup:', err);
         res.status(500).json({ success: false, message: 'Error: ' + err.message });
+    }
+});
+
+// ─── Restaurar un backup subiendo un archivo JSON ────────────────────────────
+router.post('/restaurar', upload.single('backupFile'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No se envió ningún archivo.' });
+        }
+
+        const backupData = JSON.parse(req.file.buffer.toString('utf-8'));
+        
+        if (!backupData.datos) {
+            return res.status(400).json({ success: false, message: 'El archivo JSON no tiene el formato correcto.' });
+        }
+
+        const ORDEN = [
+            'escuelas', 'categorias', 'usuarios', 'jugadores',
+            'asistencias', 'pagos', 'torneos', 'torneo_participantes', 'partidos'
+        ];
+
+        const TABLAS_SCHEMA = {
+            escuelas:             schema.escuelas,
+            categorias:           schema.categorias,
+            usuarios:             schema.usuarios,
+            jugadores:            schema.jugadores,
+            asistencias:          schema.asistencias,
+            pagos:                schema.pagos,
+            torneos:              schema.torneos,
+            torneo_participantes: schema.torneo_participantes,
+            partidos:             schema.partidos,
+        };
+
+        let totalRestaurados = 0;
+
+        // Importar datos
+        for (const nombre of ORDEN) {
+            const datos = backupData.datos[nombre];
+            if (!datos || datos.length === 0) continue;
+            
+            const tablaSchema = TABLAS_SCHEMA[nombre];
+            if (!tablaSchema) continue;
+
+            const LOTE = 50;
+            for (let i = 0; i < datos.length; i += LOTE) {
+                const lote = datos.slice(i, i + LOTE);
+                await db.insert(tablaSchema).values(lote).onConflictDoNothing();
+                totalRestaurados += lote.length;
+            }
+        }
+
+        // Resetear secuencias para que los nuevos IDs autoincrementables funcionen
+        for (const nombre of ORDEN) {
+            try {
+                await client.unsafe(`
+                    SELECT setval(
+                        pg_get_serial_sequence('${nombre}', 'id'),
+                        COALESCE((SELECT MAX(id) FROM "${nombre}"), 0) + 1,
+                        false
+                    )
+                `);
+            } catch (e) {
+                // Ignorar tablas sin secuencias
+            }
+        }
+
+        console.log(`✅ Restauración vía web completada por ${req.user?.email}: ${totalRestaurados} registros importados`);
+        res.json({ success: true, registros: totalRestaurados });
+
+    } catch (err) {
+        console.error('❌ Error restaurando backup:', err);
+        res.status(500).json({ success: false, message: 'Error procesando el archivo: ' + err.message });
     }
 });
 
