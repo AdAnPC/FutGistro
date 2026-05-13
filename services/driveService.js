@@ -11,20 +11,21 @@ const driveService = {
             if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
                 console.log("✅ Usando variable de entorno (Render).");
                 try {
-                    // Limpieza extrema: Nos aseguramos de que los saltos de línea literales no rompan el JSON
-                    const sanitized = process.env.GOOGLE_SERVICE_ACCOUNT_JSON.trim();
-                    keyData = JSON.parse(sanitized);
-                } catch (parseError) {
-                    console.error("❌ Error parseando JSON de Render. Intentando limpieza de emergencia...");
-                    // Si falla el parseo normal, es probable que haya caracteres mal escapados
-                    try {
-                        const fixedJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
-                            .replace(/\n/g, '\\n')
-                            .replace(/\r/g, '\\r');
-                        keyData = JSON.parse(fixedJson);
-                    } catch (e) {
-                        throw new Error(`Error fatal en GOOGLE_SERVICE_ACCOUNT_JSON: ${parseError.message}`);
+                    const rawValue = process.env.GOOGLE_SERVICE_ACCOUNT_JSON.trim();
+                    let jsonString;
+                    
+                    // Si parece Base64 (no tiene llaves al principio), lo decodificamos
+                    if (!rawValue.startsWith('{')) {
+                        console.log("ℹ️ Detectado formato Base64. Decodificando...");
+                        jsonString = Buffer.from(rawValue, 'base64').toString('utf8');
+                    } else {
+                        jsonString = rawValue;
                     }
+
+                    keyData = JSON.parse(jsonString);
+                } catch (parseError) {
+                    console.error("❌ Error parseando JSON de Render:", parseError.message);
+                    throw new Error(`Error en la configuración de Google Drive: ${parseError.message}`);
                 }
             } else {
                 const configPath = path.join(__dirname, '../config/google-service-account.json');
