@@ -8,7 +8,10 @@ const API = {
     request: async (url, options = {}) => {
         try {
             const defaultOptions = {
-                headers: {}
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
             };
 
             if (!(options.body instanceof FormData)) {
