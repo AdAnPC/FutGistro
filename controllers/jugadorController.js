@@ -1,4 +1,5 @@
 const jugadorService = require('../services/jugadorService');
+const driveService = require('../services/driveService');
 const catchAsync = require('../utils/catchAsync');
 const response = require('../utils/response');
 const AppError = require('../utils/AppError');
@@ -56,13 +57,11 @@ const jugadorController = {
             throw new AppError('No se subió ningún archivo', 400);
         }
         const file = req.files[0];
-        let folder = 'documentos';
-        if (file.fieldname === 'foto') folder = 'fotos';
-        else if (file.fieldname === 'logo') folder = 'logos';
-        else if (file.fieldname === 'firma_padre' || file.fieldname === 'firma_entrenador') folder = 'firmas';
-
-        const filePath = `/uploads/${folder}/${file.filename}`;
-        res.status(200).json({ success: true, url: filePath, fieldname: file.fieldname });
+        
+        // Subir a Google Drive
+        const driveUrl = await driveService.uploadFile(file.path, file.filename, file.mimetype);
+        
+        res.status(200).json({ success: true, url: driveUrl, fieldname: file.fieldname });
     }),
 
     // POST /api/jugadores

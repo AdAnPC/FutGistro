@@ -2,6 +2,7 @@ const { db } = require('../db');
 const { escuelas, jugadores } = require('../db/schema.js');
 const { eq, asc } = require('drizzle-orm');
 const fileService = require('./fileService');
+const driveService = require('./driveService');
 const { processDriveUrl } = require('../utils/drive');
 
 const escuelaService = {
@@ -52,7 +53,7 @@ const escuelaService = {
         };
         
         if (file) {
-            dataToCreate.logo = '/uploads/logos/' + file.filename;
+            dataToCreate.logo = await driveService.uploadFile(file.path, file.filename, file.mimetype);
         } else if (logo_url) {
             dataToCreate.logo = processDriveUrl(logo_url);
         }
@@ -90,7 +91,7 @@ const escuelaService = {
         
         if (file) {
             fileService.deleteFile(escuela.logo);
-            dataToUpdate.logo = '/uploads/logos/' + file.filename;
+            dataToUpdate.logo = await driveService.uploadFile(file.path, file.filename, file.mimetype);
         } else if (logo_url) {
             // Si hay una URL de logo y no se subió archivo, usamos la URL
             dataToUpdate.logo = processDriveUrl(logo_url);

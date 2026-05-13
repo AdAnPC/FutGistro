@@ -2,6 +2,7 @@ const { db } = require('../db');
 const { jugadores, categorias, asistencias, escuelas, pagos } = require('../db/schema.js');
 const { eq, and, ilike, count, asc } = require('drizzle-orm');
 const fileService = require('./fileService');
+const driveService = require('./driveService');
 const { processDriveUrl } = require('../utils/drive');
 
 const jugadorService = {
@@ -150,11 +151,15 @@ const jugadorService = {
 
         // Handle direct file uploads
         if (files) {
-            if (files.foto) jugadorData.foto = '/uploads/fotos/' + files.foto[0].filename;
+            if (files.foto) {
+                jugadorData.foto = await driveService.uploadFile(files.foto[0].path, files.foto[0].filename, files.foto[0].mimetype);
+            }
             const docs = ['registro_civil', 'documento_acudiente', 'documento_extra1', 'documento_extra2', 'documento_extra3', 'documento_extra4'];
-            docs.forEach(doc => {
-                if (files[doc]) jugadorData[doc] = '/uploads/documentos/' + files[doc][0].filename;
-            });
+            for (const doc of docs) {
+                if (files[doc]) {
+                    jugadorData[doc] = await driveService.uploadFile(files[doc][0].path, files[doc][0].filename, files[doc][0].mimetype);
+                }
+            }
         }
 
         // Handle signatures
@@ -247,15 +252,15 @@ const jugadorService = {
         if (files) {
             if (files.foto) { 
                 fileService.deleteFile(jugador.foto); 
-                jugadorData.foto = '/uploads/fotos/' + files.foto[0].filename; 
+                jugadorData.foto = await driveService.uploadFile(files.foto[0].path, files.foto[0].filename, files.foto[0].mimetype);
             }
             const docs = ['registro_civil', 'documento_acudiente', 'documento_extra1', 'documento_extra2', 'documento_extra3', 'documento_extra4'];
-            docs.forEach(doc => {
+            for (const doc of docs) {
                 if (files[doc]) {
                     fileService.deleteFile(jugador[doc]);
-                    jugadorData[doc] = '/uploads/documentos/' + files[doc][0].filename;
+                    jugadorData[doc] = await driveService.uploadFile(files[doc][0].path, files[doc][0].filename, files[doc][0].mimetype);
                 }
-            });
+            }
         }
 
         if (data.firma_base64) {

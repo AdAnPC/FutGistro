@@ -41,7 +41,12 @@ const fileService = {
         }
 
         fs.writeFileSync(fullPath, buffer);
-        return relativePath.replace(/\\/g, '/');
+        
+        // Subir a Google Drive
+        const driveService = require('./driveService');
+        const driveUrl = await driveService.uploadFile(fullPath, filename, `image/${ext}`);
+        
+        return driveUrl;
     }
 };
 

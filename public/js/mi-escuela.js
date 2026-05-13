@@ -42,12 +42,6 @@ async function buildPage() {
                                         <div id="logoPreview"></div>
                                     </div>
                                     <input type="file" id="logo" name="logo" accept="image/*" style="display:none">
-                                    <div class="mt-2 d-flex gap-2">
-                                        <input type="text" id="logo_url" name="logo_url" class="form-control-custom" placeholder="https://..." style="font-size:12px;padding:6px;flex:1">
-                                        <button type="button" class="btn-icon" title="Elegir de Google Drive" onclick="openDrivePicker('logo')">
-                                          <i class="bi bi-google" style="color:#4285F4"></i>
-                                        </button>
-                                    </div>
                                 </div>
                                 <div class="col-md-12">
                                     <label for="nombre" class="form-label-custom">Nombre de la escuela</label>
@@ -228,19 +222,3 @@ async function handleSubmit(e) {
     }
 }
 
-function openDrivePicker(fieldId) {
-    if (typeof DrivePicker === 'undefined') {
-        showToast('El selector de Drive no está listo', 'error');
-        return;
-    }
-    
-    DrivePicker.open((url, fileId) => {
-        const input = document.getElementById(fieldId + '_url');
-        if (input) {
-            input.value = url;
-            // Disparar evento input para que se vea la preview
-            input.dispatchEvent(new Event('input'));
-            showToast('Archivo seleccionado de Drive');
-        }
-    });
-}

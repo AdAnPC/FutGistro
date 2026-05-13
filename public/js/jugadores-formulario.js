@@ -196,12 +196,6 @@ async function buildPage() {
                           <div id="${s.preview}"></div>
                         </div>
                         <input type="file" id="${s.id}" name="${s.id}" accept="image/*,.pdf" style="display:none" data-slot="${s.slot}">
-                        <div class="mt-2 d-flex gap-2">
-                          <input type="text" id="${s.id}_url" name="${s.id}_url" class="form-control-custom" placeholder="URL de Drive..." style="font-size:11px;padding:4px;flex:1">
-                          <button type="button" class="btn-icon" title="Elegir de Google Drive" onclick="openDrivePicker('${s.id}')">
-                            <i class="bi bi-google" style="color:#4285F4"></i>
-                          </button>
-                        </div>
                       </div>`).join('')}
                   </div>
                   <button type="button" class="btn-primary-custom w-100 mt-4" id="btn-next-4">Continuar a Firma Digital <i class="bi bi-arrow-down-circle ms-1"></i></button>
@@ -661,21 +655,4 @@ function showAllSections() {
     const submit = document.getElementById('section-submit');
     if (submit) submit.style.removeProperty('display');
     setupSignaturePad();
-}
-
-function openDrivePicker(fieldId) {
-    if (typeof DrivePicker === 'undefined') {
-        showToast('El selector de Drive no está listo', 'error');
-        return;
-    }
-    
-    DrivePicker.open((url, fileId) => {
-        const input = document.getElementById(fieldId + '_url');
-        if (input) {
-            input.value = url;
-            // Disparar evento input para que se vea la preview
-            input.dispatchEvent(new Event('input'));
-            showToast('Archivo seleccionado de Drive');
-        }
-    });
 }
