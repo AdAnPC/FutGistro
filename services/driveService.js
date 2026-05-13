@@ -10,22 +10,24 @@ const driveService = {
             
             if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
                 console.log("✅ Usando variable de entorno (Render).");
-                try {
-                    const rawValue = process.env.GOOGLE_SERVICE_ACCOUNT_JSON.trim();
-                    let jsonString;
-                    
-                    // Si parece Base64 (no tiene llaves al principio), lo decodificamos
-                    if (!rawValue.startsWith('{')) {
-                        console.log("ℹ️ Detectado formato Base64. Decodificando...");
-                        jsonString = Buffer.from(rawValue, 'base64').toString('utf8');
-                    } else {
-                        jsonString = rawValue;
-                    }
+                const rawValue = process.env.GOOGLE_SERVICE_ACCOUNT_JSON.trim();
+                let jsonString;
 
-                    keyData = JSON.parse(jsonString);
-                } catch (parseError) {
-                    console.error("❌ Error parseando JSON de Render:", parseError.message);
-                    throw new Error(`Error en la configuración de Google Drive: ${parseError.message}`);
+                try {
+                    // Intento 1: ¿Es JSON normal?
+                    keyData = JSON.parse(rawValue);
+                    console.log("✅ JSON normal cargado correctamente.");
+                } catch (e1) {
+                    // Intento 2: ¿Es Base64?
+                    console.log("ℹ️ JSON normal falló. Intentando decodificar Base64...");
+                    try {
+                        jsonString = Buffer.from(rawValue, 'base64').toString('utf8');
+                        keyData = JSON.parse(jsonString);
+                        console.log("✅ Base64 decodificado y JSON cargado con éxito.");
+                    } catch (e2) {
+                        console.error("❌ Ambos métodos fallaron (JSON y Base64).");
+                        throw new Error(`Error en formato de GOOGLE_SERVICE_ACCOUNT_JSON: ${e1.message}`);
+                    }
                 }
             } else {
                 const configPath = path.join(__dirname, '../config/google-service-account.json');
