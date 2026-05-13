@@ -278,6 +278,12 @@ router.post('/restaurar', upload.single('backupFile'), async (req, res) => {
 
         let totalRestaurados = 0;
 
+        const isIsoDate = (str) => {
+            if (typeof str !== 'string') return false;
+            // Verifica formato ISO 8601 ej: 2024-05-12T12:30:00.000Z o 2024-05-12T12:30:00Z
+            return /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$/.test(str);
+        };
+
         // Importar datos
         for (const nombre of ORDEN) {
             const datos = backupData.datos[nombre];
@@ -288,7 +294,16 @@ router.post('/restaurar', upload.single('backupFile'), async (req, res) => {
 
             const LOTE = 50;
             for (let i = 0; i < datos.length; i += LOTE) {
-                const lote = datos.slice(i, i + LOTE);
+                const lote = datos.slice(i, i + LOTE).map(fila => {
+                    const nuevaFila = { ...fila };
+                    for (const key in nuevaFila) {
+                        if (isIsoDate(nuevaFila[key])) {
+                            nuevaFila[key] = new Date(nuevaFila[key]);
+                        }
+                    }
+                    return nuevaFila;
+                });
+                
                 await db.insert(tablaSchema).values(lote).onConflictDoNothing();
                 totalRestaurados += lote.length;
             }
