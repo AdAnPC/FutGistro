@@ -2,22 +2,22 @@ const { google } = require('googleapis');
 const path = require('path');
 const fs = require('fs');
 
-const KEYFILEPATH = path.join(__dirname, '../config/google-service-account.json');
+const KEY_DATA = require('../config/google-service-account.json');
 const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
 
-const auth = new google.auth.GoogleAuth({
-    keyFile: KEYFILEPATH,
-    scopes: SCOPES,
-});
+const auth = new google.auth.JWT(
+    KEY_DATA.client_email,
+    null,
+    KEY_DATA.private_key,
+    SCOPES
+);
 
 const driveService = {
     uploadFile: async (filePath, fileName, mimeType) => {
         try {
-            console.log(`🚀 Iniciando subida a Drive: ${fileName} (${mimeType})`);
+            console.log(`🚀 Intentando subir a Drive con: ${KEY_DATA.client_email}`);
             
-            // Forzar obtención de cliente autenticado
-            const authClient = await auth.getClient();
-            const drive = google.drive({ version: 'v3', auth: authClient });
+            const drive = google.drive({ version: 'v3', auth });
 
             const fileMetadata = {
                 name: fileName,
