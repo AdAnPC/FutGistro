@@ -6,15 +6,17 @@ const driveService = {
     uploadFile: async (filePath, fileName, mimeType) => {
         try {
             let keyData;
-            try {
+            
+            if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+                console.log("✅ Usando configuración de Google desde variable de entorno (Render).");
                 keyData = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-            } catch (e) {
-                // Fallback a archivo local si existe (para desarrollo local)
+            } else {
+                console.log("ℹ️ Variable de entorno no encontrada. Buscando archivo local...");
                 try {
-                    const path = require('path');
                     keyData = require('../config/google-service-account.json');
-                } catch (e2) {
-                    throw new Error('No se encontró la configuración de Google Service Account (Variable de entorno o archivo)');
+                    console.log("✅ Usando archivo local: config/google-service-account.json");
+                } catch (e) {
+                    throw new Error('No se encontró GOOGLE_SERVICE_ACCOUNT_JSON en Render ni el archivo config/google-service-account.json en tu PC.');
                 }
             }
 
@@ -25,7 +27,7 @@ const driveService = {
                 SCOPES
             );
 
-            console.log(`🚀 Intentando subir a Drive con: ${keyData.client_email}`);
+            console.log(`🚀 Subiendo a Drive con cuenta: ${keyData.client_email}`);
             
             const drive = google.drive({ version: 'v3', auth });
 
