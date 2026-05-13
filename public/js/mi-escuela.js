@@ -42,6 +42,10 @@ async function buildPage() {
                                         <div id="logoPreview"></div>
                                     </div>
                                     <input type="file" id="logo" name="logo" accept="image/*" style="display:none">
+                                    <div class="mt-2">
+                                        <label for="logo_url" class="form-label-custom" style="font-size:12px">O pega una URL (Ej: Google Drive):</label>
+                                        <input type="text" id="logo_url" name="logo_url" class="form-control-custom" placeholder="https://..." style="font-size:12px;padding:6px">
+                                    </div>
                                 </div>
                                 <div class="col-md-12">
                                     <label for="nombre" class="form-label-custom">Nombre de la escuela</label>
@@ -142,6 +146,11 @@ async function loadData() {
                 document.getElementById('logoIcon').style.display = 'none';
                 document.getElementById('logoText').style.display = 'none';
                 document.getElementById('logoPreview').innerHTML  = `<img src="${esc.logo}" style="max-width:100%;border-radius:8px;">`;
+                
+                // Si el logo parece una URL externa, lo ponemos en el campo de texto
+                if (esc.logo.startsWith('http')) {
+                    document.getElementById('logo_url').value = esc.logo;
+                }
             }
         }
     } catch (e) {
@@ -177,6 +186,7 @@ async function handleSubmit(e) {
     formData.append('precio_mensualidad', document.getElementById('precio_mensualidad').value || 0);
     formData.append('departamento',       document.getElementById('departamento').value);
     formData.append('ciudad',             document.getElementById('ciudad').value);
+    formData.append('logo_url',           document.getElementById('logo_url').value);
 
     const file = document.getElementById('logo').files[0];
     if (file) formData.append('logo', file);
