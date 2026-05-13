@@ -99,16 +99,22 @@ function renderFicha(j) {
 
         <!-- Quick Actions -->
         <div class="row g-2 mb-4 slide-up justify-content-center" style="animation-delay:0.05s">
-          <div class="col-md-6 col-12 d-flex justify-content-center">
+          <div class="col-md-4 col-12 d-flex justify-content-center">
+            <button class="btn d-flex align-items-center justify-content-center gap-2" id="btn-carnet"
+              style="width:100%;max-width:250px;color:white;background:linear-gradient(135deg,var(--primary),#3b82f6);border:none;padding:10px 12px;border-radius:var(--radius-md);font-weight:600;font-size:13px;box-shadow:0 2px 4px rgba(0,0,0,0.1);transition:transform 0.2s;">
+              <i class="bi bi-person-badge-fill" style="font-size:16px;"></i> Generar Carnet
+            </button>
+          </div>
+          <div class="col-md-4 col-12 d-flex justify-content-center">
             <button class="btn d-flex align-items-center justify-content-center gap-2" id="btn-ficha"
               style="width:100%;max-width:250px;color:white;background:linear-gradient(135deg,var(--info),#0284c7);border:none;padding:10px 12px;border-radius:var(--radius-md);font-weight:600;font-size:13px;box-shadow:0 2px 4px rgba(0,0,0,0.1);transition:transform 0.2s;">
               <i class="bi bi-file-earmark-pdf-fill" style="font-size:16px;"></i> Descargar Ficha
             </button>
           </div>
-          <div class="col-md-6 col-12 d-flex justify-content-center">
+          <div class="col-md-4 col-12 d-flex justify-content-center">
             <button class="btn d-flex align-items-center justify-content-center gap-2" id="btn-scroll-pagos"
               style="width:100%;max-width:250px;color:white;background:linear-gradient(135deg,var(--success),#059669);border:none;padding:10px 12px;border-radius:var(--radius-md);font-weight:600;font-size:13px;box-shadow:0 2px 4px rgba(0,0,0,0.1);transition:transform 0.2s;">
-              <i class="bi bi-eye-fill" style="font-size:16px;"></i> Ver Historial de Pago
+              <i class="bi bi-eye-fill" style="font-size:16px;"></i> Ver Pagos
             </button>
           </div>
         </div>
@@ -229,6 +235,7 @@ function renderFicha(j) {
 
     // Eventos sin onclick inline
     document.getElementById('btn-delete-player').addEventListener('click', eliminarJugador);
+    document.getElementById('btn-carnet').addEventListener('click', generarCarnetFicha);
     document.getElementById('btn-ficha').addEventListener('click', generarFichaTecnica);
     document.getElementById('btn-paz-salvo').addEventListener('click', generarPazYSalvo);
     document.getElementById('btn-historial-pdf').addEventListener('click', descargarHistorialPagosPDF);
@@ -657,3 +664,78 @@ async function generarFichaTecnica() {
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-pdf-fill"></i> Descargar Ficha'; }
     }
 }
+
+async function generarCarnetFicha() {
+    if (!jugadorData) return;
+    try {
+        showToast('Generando carnet...', 'info');
+        const j = jugadorData;
+        const { jsPDF } = window.jspdf;
+        
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [54, 85.6] });
+
+        doc.setFillColor(15, 23, 42); 
+        doc.rect(0, 0, 54, 25, 'F');
+        doc.setFillColor(16, 185, 129); 
+        doc.rect(0, 25, 54, 2, 'F');
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        const escuelaName = j.escuela ? j.escuela.nombre.toUpperCase() : 'ESCUELA DE FÚTBOL';
+        doc.text(escuelaName, 27, 10, { align: 'center', maxWidth: 50 });
+
+        doc.setTextColor(16, 185, 129);
+        doc.setFontSize(6);
+        doc.text('CARNET DE JUGADOR', 27, 20, { align: 'center' });
+
+        if (j.foto) {
+            await new Promise((resolve) => {
+                const img = new Image();
+                img.crossOrigin = 'Anonymous';
+                img.onload = () => {
+                    doc.addImage(img, 'JPEG', 17, 30, 20, 20);
+                    resolve();
+                };
+                img.onerror = () => resolve();
+                img.src = j.foto;
+            });
+        } else {
+            doc.setFillColor(200, 200, 200);
+            doc.rect(17, 30, 20, 20, 'F');
+            doc.setTextColor(100, 100, 100);
+            doc.setFontSize(8);
+            doc.text('SIN FOTO', 27, 41, { align: 'center' });
+        }
+
+        let y = 56;
+        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.text(j.nombre.toUpperCase(), 27, y, { align: 'center', maxWidth: 50 });
+        y += 5;
+
+        doc.setFontSize(6);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`DOC: ${j.documento}`, 27, y, { align: 'center' });
+        y += 4;
+        doc.text(`CAT: ${j.categoria ? j.categoria.nombre : 'S/C'}`, 27, y, { align: 'center' });
+        y += 4;
+        doc.text(`RH: ${j.rh || 'N/A'}`, 27, y, { align: 'center' });
+        const edad = j.edad || calcularEdad(j.fecha_nacimiento);
+        y += 4;
+        doc.text(`EDAD: ${edad} AÑOS`, 27, y, { align: 'center' });
+
+        doc.setFillColor(241, 245, 249);
+        doc.rect(0, 77, 54, 9, 'F');
+        doc.setTextColor(100, 116, 139);
+        doc.setFontSize(4);
+        doc.text('Documento válido para la temporada actual.', 27, 81, { align: 'center' });
+        doc.text('Generado por futGistro ©', 27, 84, { align: 'center' });
+
+        doc.save(`Carnet_${j.nombre.replace(/\s+/g, '_')}.pdf`);
+    } catch (e) {
+        showToast(e.message || 'Error al generar el carnet', 'error');
+    }
+}
+

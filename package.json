@@ -9,7 +9,10 @@
     "seed": "node seeders/seed.js",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:backup": "node scripts/exportar-datos.js",
+    "db:restore": "node scripts/importar-datos.js",
+    "db:restore-file": "node scripts/restaurar-backup.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

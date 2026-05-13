@@ -1,40 +1,26 @@
 require('dotenv').config();
 const express = require('express');
-const session = require('express-session');
 const path = require('path');
 const os = require('os');
-const { db } = require('./db');
-const { usuarios } = require('./db/schema.js');
-const { eq } = require('drizzle-orm');
-const { migrate } = require('drizzle-orm/postgres-js/migrator');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const morgan = require('morgan');
+const { migrate } = require('drizzle-orm/postgres-js/migrator');
 
+const { db } = require('./db');
+const { usuarios } = require('./db/schema.js');
+const { eq } = require('drizzle-orm');
+const sessionConfig = require('./config/session');
+const { authMiddleware } = require('./middleware/authMiddleware');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
-// Session Storage Configuration (Supports Redis or MySQL)
-let sessionStore;
-if (process.env.REDIS_URL) {
-    // REDIS Setup
-    const { RedisStore } = require('connect-redis');
-    const { createClient } = require('redis');
-    const redisClient = createClient({ url: process.env.REDIS_URL });
-    redisClient.connect().catch(err => console.error('❌ Error conectando a Redis:', err));
-    sessionStore = new RedisStore({ client: redisClient, prefix: "futgistro:" });
-    console.log('✅ Usando Redis para almacenamiento de sesiones');
-} else {
-    // Memory Setup (Fallback)
-    console.warn('⚠️ No se encontró REDIS_URL. Usando MemoryStore (No apto para producción)');
-}
-
-// Obtener IP local de la red (para logs de inicio)
+// Helpers
 function getLocalIP() {
     const interfaces = os.networkInterfaces();
     for (const name of Object.keys(interfaces)) {
@@ -47,22 +33,19 @@ function getLocalIP() {
     return 'localhost';
 }
 
-// Production Middlewares
-app.use(compression()); // Compress responses
-app.use(morgan(IS_PRODUCTION ? 'combined' : 'dev')); // Better logging
-
-// Security Middlewares
+// Security & Optimization Middlewares
+app.use(compression());
+app.use(morgan(IS_PRODUCTION ? 'combined' : 'dev'));
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.disable('x-powered-by');
 
-// Trust proxy for secure cookies (Needed for hostings like Railway/Render)
 if (IS_PRODUCTION) {
     app.set('trust proxy', 1);
 }
 
-// Limiter to prevent brute force
-const limiter = rateLimit({
+// Rate Limiters
+const globalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 1000,
     standardHeaders: true,
@@ -76,61 +59,48 @@ const authLimiter = rateLimit({
     message: 'Demasiados intentos de acceso desde esta IP, por favor intente de nuevo en una hora.'
 });
 
-// Use global limiter
-app.use(limiter);
+app.use(globalLimiter);
 
-// Payload limit Middlewares
+// Body Parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Session with Store
-app.use(session({
-    key: 'futgistro_session',
-    secret: process.env.SESSION_SECRET || 'default_secret',
-    store: sessionStore,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-        maxAge: 8 * 60 * 60 * 1000,
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: IS_PRODUCTION // Use secure cookies only in production (HTTPS)
-    }
-}));
+// Session
+app.use(sessionConfig(IS_PRODUCTION));
 
 // Static files
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Routes
-const authRoutes = require('./routes/authRoutes');
-const categoriaRoutes = require('./routes/categoriaRoutes');
-const jugadorRoutes = require('./routes/jugadorRoutes');
-const asistenciaRoutes = require('./routes/asistenciaRoutes');
-const escuelaRoutes = require('./routes/escuelaRoutes');
-const pagoRoutes = require('./routes/pagoRoutes');
-const torneoRoutes = require('./routes/torneoRoutes');
-const { authMiddleware } = require('./middleware/authMiddleware');
+const routes = {
+    auth: require('./routes/authRoutes'),
+    categorias: require('./routes/categoriaRoutes'),
+    jugadores: require('./routes/jugadorRoutes'),
+    asistencia: require('./routes/asistenciaRoutes'),
+    escuelas: require('./routes/escuelaRoutes'),
+    pagos: require('./routes/pagoRoutes'),
+    torneos: require('./routes/torneoRoutes'),
+    backup: require('./routes/backupRoutes')
+};
 
-// Auth routes (Apply stricter rate limiter to authentication endpoints)
-app.use('/auth', authLimiter, authRoutes);
-app.use('/categorias', categoriaRoutes);
-app.use('/jugadores', jugadorRoutes);
-app.use('/asistencia', asistenciaRoutes);
-app.use('/escuelas', escuelaRoutes);
-app.use('/pagos', pagoRoutes);
-app.use('/torneos', torneoRoutes);
+app.use('/auth', authLimiter, routes.auth);
+app.use('/categorias', routes.categorias);
+app.use('/jugadores', routes.jugadores);
+app.use('/asistencia', routes.asistencia);
+app.use('/escuelas', routes.escuelas);
+app.use('/pagos', routes.pagos);
+app.use('/torneos', routes.torneos);
+app.use('/backup', routes.backup);
 
-// Dashboard
 app.get('/dashboard', authMiddleware, (req, res) => {
     res.sendFile(path.join(__dirname, 'views', 'dashboard.html'));
 });
 
-// Root redirect
 app.get('/', (req, res) => {
     res.redirect('/auth/login');
 });
 
-// 404 handler
+// Error handling
 app.use((req, res) => {
     res.status(404).send(`
     <!DOCTYPE html>
@@ -149,13 +119,20 @@ app.use((req, res) => {
   `);
 });
 
-// Error handler
 app.use((err, req, res, next) => {
-    console.error('Error:', err);
-    res.status(500).json({ success: false, message: 'Error interno del servidor' });
+    console.error('❌ Error Handler:', err);
+    
+    const statusCode = err.statusCode || 500;
+    const message = err.message || 'Error interno del servidor';
+    
+    res.status(statusCode).json({
+        success: false,
+        message,
+        stack: IS_PRODUCTION ? undefined : err.stack
+    });
 });
 
-// Suministrar el primer usuario administrador si no existe
+// Admin Seeder
 async function seedInitialAdmin() {
     try {
         const adminEmail = 'superadmin@futgistro.com';
@@ -177,40 +154,21 @@ async function seedInitialAdmin() {
     }
 }
 
-// Database sync and start
+// Start Server
 async function startServer() {
     try {
-        // Verificar conexión (Haciendo una consulta simple)
-        await db.select({ id: usuarios.id }).from(usuarios).limit(1).catch(() => {});
-        console.log('✅ Conexión a PostgreSQL (Drizzle) establecida correctamente');
-
-        // Ejecutar migraciones automáticamente
+        // Sync Database
         console.log('🔄 Sincronizando estructura de la base de datos...');
         await migrate(db, { migrationsFolder: './drizzle' });
         console.log('✅ Base de datos sincronizada con Drizzle');
 
-        // Crear usuario administrador inicial si no existe
         await seedInitialAdmin();
 
         const localIP = getLocalIP();
-
         app.listen(PORT, HOST, () => {
-            console.log('');
-            console.log('═══════════════════════════════════════════════════');
-            console.log('  🚀 Servidor de futGistro iniciado');
-            console.log('═══════════════════════════════════════════════════');
-            console.log('');
-            console.log('  📍 Acceso local (esta PC):');
-            console.log(`     http://localhost:${PORT}`);
-            console.log('');
-            console.log('  📱 Acceso red local (otros dispositivos):');
-            console.log(`     http://${localIP}:${PORT}`);
-            console.log('');
-            console.log('  📋 Dashboard: /dashboard');
-            console.log('  🔐 Login:     /auth/login');
-            console.log('');
-            console.log('═══════════════════════════════════════════════════');
-            console.log('');
+            console.log('\n🚀 Servidor de futGistro iniciado');
+            console.log(`📍 Local: http://localhost:${PORT}`);
+            console.log(`📱 Red:   http://${localIP}:${PORT}\n`);
         });
     } catch (error) {
         console.error('❌ Error al iniciar el servidor:', error);

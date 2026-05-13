@@ -1,20 +1,7 @@
-const { db } = require('../db');
-const { escuelas, jugadores } = require('../db/schema.js');
-const { eq, asc } = require('drizzle-orm');
-const path = require('path');
-const fs = require('fs');
-
-function eliminarArchivo(filePath) {
-    if (!filePath) return;
-    const fullPath = path.join(__dirname, '..', 'public', filePath);
-    if (fs.existsSync(fullPath)) {
-        try {
-            fs.unlinkSync(fullPath);
-        } catch (e) {
-            console.error('Error eliminando archivo:', e);
-        }
-    }
-}
+const escuelaService = require('../services/escuelaService');
+const catchAsync = require('../utils/catchAsync');
+const response = require('../utils/response');
+const AppError = require('../utils/AppError');
 
 const escuelaController = {
     // GET /escuelas/page
@@ -29,211 +16,79 @@ const escuelaController = {
     },
 
     // GET /api/escuelas
-    listar: async (req, res) => {
-        try {
-            const listaEscuelas = await db.query.escuelas.findMany({
-                with: {
-                    jugadores: { columns: { id: true } }
-                },
-                orderBy: [asc(escuelas.nombre)]
-            });
-
-            const data = listaEscuelas.map(esc => ({
-                ...esc,
-                total_jugadores: esc.jugadores ? esc.jugadores.length : 0
-            }));
-
-            res.json({ success: true, data });
-        } catch (error) {
-            console.error('Error listando escuelas:', error);
-            res.status(500).json({ success: false, message: 'Error en el servidor' });
-        }
-    },
+    listar: catchAsync(async (req, res) => {
+        const data = await escuelaService.listSchools();
+        response.success(res, data);
+    }),
 
     // GET /api/escuelas/:id
-    obtener: async (req, res) => {
-        try {
-            const id = parseInt(req.params.id);
-            const escuela = await db.query.escuelas.findFirst({
-                where: eq(escuelas.id, id),
-                with: {
-                    jugadores: {
-                        columns: { id: true, nombre: true, fecha_nacimiento: true, documento: true, foto: true }
-                    }
-                }
-            });
+    obtener: catchAsync(async (req, res) => {
+        const id = parseInt(req.params.id);
+        const escuela = await escuelaService.getSchoolById(id);
 
-            if (!escuela) {
-                return res.status(404).json({ success: false, message: 'Escuela no encontrada' });
-            }
-
-            res.json({ success: true, data: escuela });
-        } catch (error) {
-            console.error('Error obteniendo escuela:', error);
-            res.status(500).json({ success: false, message: 'Error en el servidor' });
+        if (!escuela) {
+            throw new AppError('Escuela no encontrada', 404);
         }
-    },
+
+        response.success(res, escuela);
+    }),
 
     // GET /api/escuelas/mi-escuela/api
-    obtenerMiEscuela: async (req, res) => {
-        try {
-            if (!req.user.escuela_id) return res.status(404).json({ success: false, message: 'No tienes escuela asignada' });
-            const escuela = await db.query.escuelas.findFirst({ where: eq(escuelas.id, req.user.escuela_id) });
-            if (!escuela) return res.status(404).json({ success: false, message: 'Escuela no encontrada' });
-            res.json({ success: true, data: escuela });
-        } catch (error) {
-            console.error('Error obteniendo mi escuela:', error);
-            res.status(500).json({ success: false, message: 'Error en el servidor' });
+    obtenerMiEscuela: catchAsync(async (req, res) => {
+        if (!req.user.escuela_id) {
+            throw new AppError('No tienes escuela asignada', 404);
         }
-    },
+        const escuela = await escuelaService.getSchoolById(req.user.escuela_id);
+        if (!escuela) {
+            throw new AppError('Escuela no encontrada', 404);
+        }
+        response.success(res, escuela);
+    }),
 
     // PUT /api/escuelas/mi-escuela/api
-    actualizarMiEscuela: async (req, res) => {
-        try {
-            if (!req.user.escuela_id) return res.status(404).json({ success: false, message: 'No tienes escuela asignada' });
-            const escuela = await db.query.escuelas.findFirst({ where: eq(escuelas.id, req.user.escuela_id) });
-            if (!escuela) return res.status(404).json({ success: false, message: 'Escuela no encontrada' });
-
-            const { telefono, email } = req.body;
-            let dataToUpdate = {
-                telefono: telefono || null,
-                email: email ? email : null
-            };
-
-            if (req.body.nombre !== undefined) {
-                // Verificar nombre
-                if(req.body.nombre !== escuela.nombre) {
-                    const existe = await db.query.escuelas.findFirst({ where: eq(escuelas.nombre, req.body.nombre) });
-                    if(existe) return res.status(400).json({ success: false, message: 'Nombre en uso.' });
-                }
-                dataToUpdate.nombre = req.body.nombre;
-            }
-            if (req.body.direccion !== undefined) dataToUpdate.direccion = req.body.direccion || null;
-            if (req.body.director !== undefined) dataToUpdate.director = req.body.director || null;
-            if (req.body.precio_mensualidad !== undefined) dataToUpdate.precio_mensualidad = parseFloat(req.body.precio_mensualidad).toFixed(2) || '0.00';
-            if (req.body.departamento !== undefined) dataToUpdate.departamento = req.body.departamento || null;
-            if (req.body.ciudad !== undefined) dataToUpdate.ciudad = req.body.ciudad || null;
-
-            if (req.file) {
-                eliminarArchivo(escuela.logo);
-                dataToUpdate.logo = '/uploads/logos/' + req.file.filename;
-            }
-
-            const result = await db.update(escuelas).set(dataToUpdate).where(eq(escuelas.id, req.user.escuela_id)).returning();
-            res.json({ success: true, data: result[0], message: 'Escuela actualizada exitosamente' });
-        } catch (error) {
-            console.error(error);
-            res.status(500).json({ success: false, message: 'Error en el servidor' });
+    actualizarMiEscuela: catchAsync(async (req, res) => {
+        if (!req.user.escuela_id) {
+            throw new AppError('No tienes escuela asignada', 404);
         }
-    },
+        const updated = await escuelaService.updateSchool(req.user.escuela_id, req.body, req.file);
+        if (!updated) {
+            throw new AppError('Escuela no encontrada', 404);
+        }
+        response.success(res, updated, 'Escuela actualizada exitosamente');
+    }),
 
     // POST /api/escuelas
-    crear: async (req, res) => {
-        try {
-            const { nombre, direccion, telefono, director, email, precio_mensualidad, departamento, ciudad } = req.body;
-
-            if (!nombre) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'El nombre de la escuela es requerido'
-                });
-            }
-
-            const existe = await db.query.escuelas.findFirst({ where: eq(escuelas.nombre, nombre) });
-            if (existe) {
-                return res.status(400).json({ success: false, message: 'Ya existe una escuela con este nombre' });
-            }
-
-            const dataToCreate = {
-                nombre,
-                direccion: direccion || null,
-                telefono: telefono || null,
-                director: director || null,
-                email: email ? email : null,
-                precio_mensualidad: parseFloat(precio_mensualidad).toFixed(2) || '0.00',
-                departamento: departamento || null,
-                ciudad: ciudad || null
-            };
-            if (req.file) dataToCreate.logo = '/uploads/logos/' + req.file.filename;
-
-            const result = await db.insert(escuelas).values(dataToCreate).returning();
-            res.status(201).json({ success: true, data: result[0], message: 'Escuela creada exitosamente' });
-        } catch (error) {
-            console.error('Error creando escuela:', error);
-            res.status(500).json({ success: false, message: 'Error en el servidor' });
+    crear: catchAsync(async (req, res) => {
+        const { nombre } = req.body;
+        if (!nombre) {
+            throw new AppError('El nombre de la escuela es requerido', 400);
         }
-    },
+
+        const escuela = await escuelaService.createSchool(req.body, req.file);
+        response.success(res, escuela, 'Escuela creada exitosamente', 201);
+    }),
 
     // PUT /api/escuelas/:id
-    actualizar: async (req, res) => {
-        try {
-            const id = parseInt(req.params.id);
-            const { nombre, direccion, telefono, director, email, activa, precio_mensualidad, departamento, ciudad } = req.body;
-            const escuela = await db.query.escuelas.findFirst({ where: eq(escuelas.id, id) });
-
-            if (!escuela) {
-                return res.status(404).json({ success: false, message: 'Escuela no encontrada' });
-            }
-
-            if(nombre && nombre !== escuela.nombre) {
-                const existe = await db.query.escuelas.findFirst({ where: eq(escuelas.nombre, nombre) });
-                if(existe) return res.status(400).json({ success: false, message: 'Ya existe una escuela con este nombre' });
-            }
-
-            let dataToUpdate = {
-                nombre,
-                direccion: direccion || null,
-                telefono: telefono || null,
-                director: director || null,
-                email: email ? email : null,
-                activa: activa === 'true' || activa === true,
-                precio_mensualidad: parseFloat(precio_mensualidad).toFixed(2) || '0.00',
-                departamento: departamento || null,
-                ciudad: ciudad || null
-            };
-            
-            if (req.file) {
-                eliminarArchivo(escuela.logo);
-                dataToUpdate.logo = '/uploads/logos/' + req.file.filename;
-            }
-
-            const result = await db.update(escuelas).set(dataToUpdate).where(eq(escuelas.id, id)).returning();
-            res.json({ success: true, data: result[0], message: 'Escuela actualizada exitosamente' });
-        } catch (error) {
-            console.error('Error actualizando escuela:', error);
-            res.status(500).json({ success: false, message: 'Error en el servidor' });
+    actualizar: catchAsync(async (req, res) => {
+        const id = parseInt(req.params.id);
+        const updated = await escuelaService.updateSchool(id, req.body, req.file);
+        if (!updated) {
+            throw new AppError('Escuela no encontrada', 404);
         }
-    },
+        response.success(res, updated, 'Escuela actualizada exitosamente');
+    }),
 
     // DELETE /api/escuelas/:id
-    eliminar: async (req, res) => {
-        try {
-            const id = parseInt(req.params.id);
-            const escuela = await db.query.escuelas.findFirst({
-                where: eq(escuelas.id, id),
-                with: { jugadores: { columns: { id: true } } }
-            });
-
-            if (!escuela) {
-                return res.status(404).json({ success: false, message: 'Escuela no encontrada' });
-            }
-
-            if (escuela.jugadores && escuela.jugadores.length > 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: `No se puede eliminar. Hay ${escuela.jugadores.length} jugador(es) en esta escuela.`
-                });
-            }
-
-            eliminarArchivo(escuela.logo);
-
-            await db.delete(escuelas).where(eq(escuelas.id, id));
-            res.json({ success: true, message: 'Escuela eliminada exitosamente' });
-        } catch (error) {
-            console.error('Error eliminando escuela:', error);
-            res.status(500).json({ success: false, message: 'Error en el servidor' });
+    eliminar: catchAsync(async (req, res) => {
+        const id = parseInt(req.params.id);
+        const success = await escuelaService.deleteSchool(id);
+        
+        if (success === null) {
+            throw new AppError('Escuela no encontrada', 404);
         }
-    }
+
+        response.success(res, null, 'Escuela eliminada exitosamente');
+    })
 };
 
 module.exports = escuelaController;

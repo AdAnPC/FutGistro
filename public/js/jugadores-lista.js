@@ -1,377 +1,248 @@
-/* ===================================================
-   jugadores-lista.js — Lógica de la vista Lista de Jugadores
-   =================================================== */
+/**
+ * jugadores-lista.js — Logic for Player List view
+ */
 
-let currentPage  = 1;
-let totalPages   = 1;
-let searchTimeout;
+const JugadoresListaPage = {
+    currentPage: 1,
+    totalPages: 1,
+    searchTimeout: null,
 
-document.addEventListener('DOMContentLoaded', () => {
-    buildPage();
-});
+    init: async () => {
+        const user = await App.loadUserInfo();
+        JugadoresListaPage.renderLayout(user);
+        JugadoresListaPage.bindEvents();
+        await JugadoresListaPage.loadCategorias();
+        await JugadoresListaPage.loadJugadores();
+    },
 
-async function buildPage() {
-    const user   = await loadUserInfo();
-    const layout = document.getElementById('appLayout');
-    layout.innerHTML = `
-        ${renderSidebar(user.nombre, user.rol)}
-        <main class="main-content">
-          <div class="top-bar">
-            <div>
-              <button class="menu-toggle" id="menuToggle"><i class="bi bi-list"></i></button>
-            </div>
-            <div>
-              <h4>Jugadores</h4>
-              <div class="breadcrumb">Gestión de jugadores registrados</div>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <a href="/dashboard" class="btn-secondary-custom" style="padding:4px 8px;font-size:12px">
-                <i class="bi bi-arrow-left"></i> Volver
-              </a>
-              <a href="/jugadores/nuevo" class="btn-primary-custom" id="btn-new-player">
-                <i class="bi bi-person-plus-fill"></i> Nuevo Jugador
-              </a>
-            </div>
-          </div>
-          <div class="content-area">
-            <!-- Filters -->
-            <div class="data-card mb-4 fade-in">
-              <div class="data-card-body">
-                <div class="row g-3 align-items-end">
-                  <div class="col-md-5">
-                    <label class="form-label-custom">Buscar jugador</label>
-                    <div class="search-bar">
-                      <i class="bi bi-search"></i>
-                      <input type="text" id="searchInput" class="form-control-custom" placeholder="Buscar por nombre...">
+    renderLayout: (user) => {
+        const layout = document.getElementById('appLayout');
+        layout.innerHTML = `
+            ${App.renderSidebar(user.nombre, user.rol)}
+            <main class="main-content">
+                <div class="top-bar">
+                    <div><button class="menu-toggle"><i class="bi bi-list"></i></button></div>
+                    <div>
+                        <h4>Jugadores</h4>
+                        <div class="breadcrumb">Gestión de jugadores registrados</div>
                     </div>
-                  </div>
-                  <div class="col-md-4">
-                    <label class="form-label-custom">Filtrar por categoría</label>
-                    <select id="categoriaFilter" class="form-select-custom">
-                      <option value="">Todas las categorías</option>
-                    </select>
-                  </div>
-                  <div class="col-md-3">
-                    <button class="btn-secondary-custom w-100 justify-content-center" id="btn-clear-filters">
-                      <i class="bi bi-x-circle"></i> Limpiar filtros
-                    </button>
-                  </div>
+                    <div class="d-flex gap-2">
+                        <a href="/dashboard" class="btn-secondary-custom"><i class="bi bi-arrow-left"></i> Volver</a>
+                        <a href="/jugadores/nuevo" class="btn-primary-custom"><i class="bi bi-person-plus-fill"></i> Nuevo Jugador</a>
+                    </div>
                 </div>
-              </div>
-            </div>
+                <div class="content-area">
+                    <div class="data-card mb-4 fade-in">
+                        <div class="data-card-body">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-5">
+                                    <label class="form-label-custom">Buscar jugador</label>
+                                    <div class="search-bar">
+                                        <i class="bi bi-search"></i>
+                                        <input type="text" id="searchInput" class="form-control-custom" placeholder="Buscar por nombre...">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label-custom">Filtrar por categoría</label>
+                                    <select id="categoriaFilter" class="form-select-custom">
+                                        <option value="">Todas las categorías</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <button class="btn-secondary-custom w-100 justify-content-center" id="btn-clear-filters">
+                                        <i class="bi bi-x-circle"></i> Limpiar filtros
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-            <!-- Players Table -->
-            <div class="data-card fade-in">
-              <div class="data-card-header">
-                <h5><i class="bi bi-people-fill me-2" style="color:var(--primary)"></i> Lista de Jugadores</h5>
-                <span class="badge-custom gray" id="totalBadge">0 jugadores</span>
-              </div>
-              <div style="overflow-x:auto">
-                <table class="table-custom">
-                  <thead>
-                    <tr>
-                      <th>Jugador</th><th>Documento</th><th>Edad</th>
-                      <th>Categoría</th><th>Padre/Acudiente</th>
-                      <th>Teléfono</th><th>Estado Pago</th><th>Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody id="jugadoresBody">
-                    <tr><td colspan="7" class="text-center" style="padding:40px;color:var(--text-muted)">Cargando...</td></tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="pagination-custom" id="pagination"></div>
-            </div>
-          </div>
-        </main>
-    `;
+                    <div class="data-card fade-in">
+                        <div class="data-card-header d-flex justify-content-between align-items-center">
+                            <h5><i class="bi bi-people-fill me-2 text-primary"></i> Lista de Jugadores</h5>
+                            <span class="badge-custom gray" id="totalBadge">0 jugadores</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table-custom">
+                                <thead>
+                                    <tr>
+                                        <th>Jugador</th><th>Documento</th><th>Edad</th>
+                                        <th>Categoría</th><th>Acudiente</th>
+                                        <th>Teléfono</th><th>Estado Pago</th><th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="jugadoresBody">
+                                    <tr><td colspan="8" class="text-center p-4 text-muted">Cargando...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="pagination-custom" id="pagination"></div>
+                    </div>
+                </div>
+            </main>
+        `;
+    },
 
-    initSidebar();
-    document.getElementById('nav-jugadores')?.classList.add('active');
+    bindEvents: () => {
+        document.getElementById('searchInput').addEventListener('input', (e) => JugadoresListaPage.handleSearch(e.target.value));
+        document.getElementById('categoriaFilter').addEventListener('change', () => { JugadoresListaPage.currentPage = 1; JugadoresListaPage.loadJugadores(); });
+        document.getElementById('btn-clear-filters').addEventListener('click', JugadoresListaPage.clearFilters);
+    },
 
-    // Eventos — sin inline
-    document.getElementById('searchInput').addEventListener('input', e => handleSearch(e.target.value));
-    document.getElementById('categoriaFilter').addEventListener('change', loadJugadores);
-    document.getElementById('btn-clear-filters').addEventListener('click', clearFilters);
+    handleSearch: (val) => {
+        clearTimeout(JugadoresListaPage.searchTimeout);
+        JugadoresListaPage.searchTimeout = setTimeout(() => {
+            JugadoresListaPage.currentPage = 1;
+            JugadoresListaPage.loadJugadores();
+        }, 300);
+    },
 
-    await loadCategorias();
-    await loadJugadores();
-}
+    clearFilters: () => {
+        document.getElementById('searchInput').value = '';
+        document.getElementById('categoriaFilter').value = '';
+        JugadoresListaPage.currentPage = 1;
+        JugadoresListaPage.loadJugadores();
+    },
 
-async function loadCategorias() {
-    try {
-        const data = await fetchAPI('/categorias');
-        if (data && data.success) {
-            const select = document.getElementById('categoriaFilter');
-            data.data.forEach(cat => {
-                const opt       = document.createElement('option');
-                opt.value       = cat.id;
-                opt.textContent = cat.nombre;
-                select.appendChild(opt);
-            });
-        }
-    } catch (e) { console.error(e); }
-}
-
-function handleSearch(value) {
-    clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => {
-        currentPage = 1;
-        loadJugadores();
-    }, 300);
-}
-
-function clearFilters() {
-    document.getElementById('searchInput').value    = '';
-    document.getElementById('categoriaFilter').value = '';
-    currentPage = 1;
-    loadJugadores();
-}
-
-async function loadJugadores() {
-    const search      = document.getElementById('searchInput')?.value || '';
-    const categoriaId = document.getElementById('categoriaFilter')?.value || '';
-
-    let url = `/jugadores/api?page=${currentPage}&limit=15`;
-    if (search)      url += `&search=${encodeURIComponent(search)}`;
-    if (categoriaId) url += `&categoria_id=${categoriaId}`;
-
-    try {
-        const data = await fetchAPI(url);
-        if (data && data.success) {
-            renderJugadores(data.data);
-            totalPages = data.paginas || 1;
-            document.getElementById('totalBadge').textContent = `${data.total} jugadores`;
-            renderPagination();
-        }
-    } catch (e) { console.error(e); }
-}
-
-function renderJugadores(jugadores) {
-    const tbody = document.getElementById('jugadoresBody');
-    if (!jugadores || jugadores.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">
-          <i class="bi bi-people"></i><h5>No se encontraron jugadores</h5>
-          <p>Intenta con otros filtros o registra un nuevo jugador</p>
-          <a href="/jugadores/nuevo" class="btn-primary-custom mt-3"><i class="bi bi-person-plus"></i> Nuevo Jugador</a>
-        </div></td></tr>`;
-        return;
-    }
-
-    tbody.innerHTML = jugadores.map(j => `
-        <tr class="fade-in" style="cursor:pointer;transition:background-color 0.2s;" title="Ver ficha del jugador" data-href="/jugadores/ficha/${j.id}">
-          <td data-label="Jugador">
-            <div style="display:flex;align-items:center;gap:10px">
-              ${j.foto
-                ? `<img src="${j.foto}" class="player-avatar" alt="${escapeHtml(j.nombre)}">`
-                : `<div class="player-avatar-placeholder">${j.nombre.charAt(0).toUpperCase()}</div>`}
-              <div>
-                <div style="font-weight:600">${escapeHtml(j.nombre)}</div>
-                <div style="font-size:11px;color:var(--text-muted)">${j.escuela ? escapeHtml(j.escuela.nombre) : ''}</div>
-              </div>
-            </div>
-          </td>
-          <td data-label="Documento" style="font-family:monospace;font-size:12px">${escapeHtml(j.documento)}</td>
-          <td data-label="Edad"><span class="badge-custom cyan">${j.edad || calcularEdad(j.fecha_nacimiento)} años</span></td>
-          <td data-label="Categoría"><span class="badge-custom green">${j.categoria ? escapeHtml(j.categoria.nombre) : 'Sin categoría'}</span></td>
-          <td data-label="Acudiente">${escapeHtml(j.nombre_padre)}</td>
-          <td data-label="Teléfono">${escapeHtml(j.telefono_padre || j.telefono || 'N/A')}</td>
-          <td data-label="Estado Pago">
-            ${j.pagos && j.pagos.length > 0
-              ? (j.pagos[0].estado === 'pagado'
-                  ? `<span class="badge-custom green" style="font-size:6px"><i class="bi bi-check-circle"></i> Pagado</span>`
-                  : `<span class="badge-custom" style="background-color:var(--danger);color:white;font-size:6px"><i class="bi bi-clock"></i> Pendiente</span>`)
-              : `<span class="badge-custom gray" style="font-size:6px" title="Generando registro...">Procesando</span>`}
-          </td>
-          <td data-label="Acciones">
-            <div style="display:flex;gap:4px;transform:translateY(-25px);">
-              ${j.pagos && j.pagos.length > 0 && j.pagos[0].estado === 'pendiente'
-                ? `<button class="btn-icon" style="color:var(--success)" title="Registrar Pago" data-pago-id="${j.pagos[0].id}"><i class="bi bi-currency-dollar"></i></button>`
-                : ''}
-              <a href="/jugadores/editar/${j.id}" class="btn-icon edit" title="Editar"><i class="bi bi-pencil"></i></a>
-            </div>
-          </td>
-        </tr>
-    `).join('');
-
-    // Delegación de eventos — filas y botones sin onclick inline
-    tbody.querySelectorAll('tr[data-href]').forEach(row => {
-        row.addEventListener('click', e => {
-            if (!e.target.closest('a') && !e.target.closest('button')) {
-                window.location.href = row.dataset.href;
+    loadCategorias: async () => {
+        try {
+            const data = await API.getCategories();
+            if (data?.success) {
+                const select = document.getElementById('categoriaFilter');
+                data.data.forEach(cat => select.add(new Option(cat.nombre, cat.id)));
             }
-        });
-        row.addEventListener('mouseover', () => row.style.backgroundColor = 'rgba(16,185,129,0.05)');
-        row.addEventListener('mouseout',  () => row.style.backgroundColor = '');
-    });
+        } catch (e) { console.error(e); }
+    },
 
-    tbody.querySelectorAll('button[data-pago-id]').forEach(btn => {
-        btn.addEventListener('click', e => {
-            e.stopPropagation();
-            registrarPago(btn.dataset.pagoId);
-        });
-    });
-}
+    loadJugadores: async () => {
+        const search = document.getElementById('searchInput').value;
+        const categoriaId = document.getElementById('categoriaFilter').value;
 
-function renderPagination() {
-    const container = document.getElementById('pagination');
-    if (totalPages <= 1) { container.innerHTML = ''; return; }
+        try {
+            const data = await API.getPlayers({ page: JugadoresListaPage.currentPage, limit: 15, search, categoria_id: categoriaId });
+            if (data?.success) {
+                JugadoresListaPage.renderJugadores(data.data);
+                JugadoresListaPage.totalPages = data.paginas || 1;
+                document.getElementById('totalBadge').textContent = `${data.total} jugadores`;
+                JugadoresListaPage.renderPagination();
+            }
+        } catch (e) { console.error(e); }
+    },
 
-    let html = `<button ${currentPage === 1 ? 'disabled' : ''} data-page="${currentPage - 1}"><i class="bi bi-chevron-left"></i></button>`;
-    for (let i = 1; i <= totalPages; i++) {
-        if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
-            html += `<button class="${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
-        } else if (i === currentPage - 3 || i === currentPage + 3) {
-            html += `<button disabled>...</button>`;
+    renderJugadores: (jugadores) => {
+        const tbody = document.getElementById('jugadoresBody');
+        if (!jugadores?.length) {
+            tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><i class="bi bi-people"></i><h5>No se encontraron jugadores</h5></div></td></tr>`;
+            return;
         }
-    }
-    html += `<button ${currentPage === totalPages ? 'disabled' : ''} data-page="${currentPage + 1}"><i class="bi bi-chevron-right"></i></button>`;
-    container.innerHTML = html;
 
-    container.querySelectorAll('button[data-page]').forEach(btn => {
-        btn.addEventListener('click', () => { currentPage = parseInt(btn.dataset.page); loadJugadores(); });
-    });
-}
+        tbody.innerHTML = jugadores.map(j => `
+            <tr class="fade-in clickable-row" onclick="if(!event.target.closest('button') && !event.target.closest('a')) window.location.href='/jugadores/ficha/${j.id}'">
+                <td>
+                    <div class="d-flex align-items-center gap-2">
+                        ${j.foto ? `<img src="${j.foto}" class="player-avatar">` : `<div class="player-avatar-placeholder">${j.nombre[0]}</div>`}
+                        <div>
+                            <div class="fw-bold">${Utils.escapeHtml(j.nombre)}</div>
+                            <div class="small text-muted">${j.escuela?.nombre || ''}</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="small font-monospace">${Utils.escapeHtml(j.documento)}</td>
+                <td><span class="badge-custom cyan">${Utils.calculateAge(j.fecha_nacimiento)} años</span></td>
+                <td><span class="badge-custom green">${j.categoria?.nombre || 'N/A'}</span></td>
+                <td class="small">${Utils.escapeHtml(j.nombre_padre)}</td>
+                <td class="small">${Utils.escapeHtml(j.telefono_padre || j.telefono || 'N/A')}</td>
+                <td>
+                    ${j.pagos?.[0] ? (
+                        j.pagos[0].estado === 'pagado' 
+                        ? `<span class="badge-custom green small"><i class="bi bi-check-circle"></i> Pagado</span>`
+                        : `<span class="badge-custom red small"><i class="bi bi-clock"></i> Pendiente</span>`
+                    ) : `<span class="badge-custom gray small">N/A</span>`}
+                </td>
+                <td>
+                    <div class="d-flex gap-1">
+                        ${j.pagos?.[0]?.estado === 'pendiente' ? `
+                            <button class="btn-icon text-success" title="Pagar" onclick="event.stopPropagation(); JugadoresListaPage.registrarPago(${j.pagos[0].id})"><i class="bi bi-currency-dollar"></i></button>
+                        ` : ''}
+                        <button class="btn-icon text-primary" title="Carnet" onclick="event.stopPropagation(); JugadoresListaPage.generarCarnet(${j.id})"><i class="bi bi-person-badge"></i></button>
+                        <a href="/jugadores/editar/${j.id}" class="btn-icon edit" onclick="event.stopPropagation()"><i class="bi bi-pencil"></i></a>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    },
 
-async function eliminarJugador(id, nombre) {
-    if (!await confirmAction(`¿Estás seguro de eliminar al jugador "${nombre}"? Esta acción no se puede deshacer.`)) return;
-    try {
-        const data = await fetchAPI(`/jugadores/api/${id}`, { method: 'DELETE' });
-        if (data && data.success) {
-            showToast('Jugador eliminado exitosamente');
-            loadJugadores();
+    renderPagination: () => {
+        const container = document.getElementById('pagination');
+        if (JugadoresListaPage.totalPages <= 1) return container.innerHTML = '';
+
+        let html = `<button ${JugadoresListaPage.currentPage === 1 ? 'disabled' : ''} onclick="JugadoresListaPage.goToPage(${JugadoresListaPage.currentPage - 1})"><i class="bi bi-chevron-left"></i></button>`;
+        for (let i = 1; i <= JugadoresListaPage.totalPages; i++) {
+            if (i === 1 || i === JugadoresListaPage.totalPages || (i >= JugadoresListaPage.currentPage - 2 && i <= JugadoresListaPage.currentPage + 2)) {
+                html += `<button class="${i === JugadoresListaPage.currentPage ? 'active' : ''}" onclick="JugadoresListaPage.goToPage(${i})">${i}</button>`;
+            } else if (i === JugadoresListaPage.currentPage - 3 || i === JugadoresListaPage.currentPage + 3) {
+                html += `<button disabled>...</button>`;
+            }
         }
-    } catch (e) {
-        showToast(e.message || 'Error al eliminar', 'error');
+        html += `<button ${JugadoresListaPage.currentPage === JugadoresListaPage.totalPages ? 'disabled' : ''} onclick="JugadoresListaPage.goToPage(${JugadoresListaPage.currentPage + 1})"><i class="bi bi-chevron-right"></i></button>`;
+        container.innerHTML = html;
+    },
+
+    goToPage: (page) => {
+        JugadoresListaPage.currentPage = page;
+        JugadoresListaPage.loadJugadores();
+    },
+
+    registrarPago: async (pagoId) => {
+        if (!await Utils.confirm('¿Deseas registrar el pago de este mes?', 'Sí, pagar', 'btn-success-custom', 'bi-cash-coin', 'var(--success)')) return;
+        try {
+            const data = await API.updatePayment(pagoId, { estado: 'pagado', fecha_pago: Utils.getTodayStr() });
+            if (data?.success) {
+                Utils.showToast('Pago registrado');
+                JugadoresListaPage.loadJugadores();
+            }
+        } catch (e) { Utils.showToast(e.message, 'error'); }
+    },
+
+    generarCarnet: async (id) => {
+        try {
+            Utils.showToast('Generando carnet...', 'info');
+            const res = await API.getPlayer(id);
+            if (!res?.success) throw new Error('No se pudo cargar el jugador');
+            const j = res.data;
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [54, 85.6] });
+
+            // Design
+            doc.setFillColor(15, 23, 42); doc.rect(0, 0, 54, 25, 'F');
+            doc.setFillColor(16, 185, 129); doc.rect(0, 25, 54, 2, 'F');
+            doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+            doc.text(j.escuela?.nombre.toUpperCase() || 'ESCUELA', 27, 10, { align: 'center', maxWidth: 50 });
+            doc.setTextColor(16, 185, 129); doc.setFontSize(6); doc.text('CARNET DE JUGADOR', 27, 20, { align: 'center' });
+
+            if (j.foto) {
+                await new Promise(r => {
+                    const img = new Image(); img.crossOrigin = 'Anonymous';
+                    img.onload = () => { doc.addImage(img, 'JPEG', 17, 30, 20, 20); r(); };
+                    img.onerror = () => r(); img.src = j.foto;
+                });
+            } else {
+                doc.setFillColor(200, 200, 200); doc.rect(17, 30, 20, 20, 'F');
+            }
+
+            doc.setTextColor(15, 23, 42); doc.setFontSize(8); doc.text(j.nombre.toUpperCase(), 27, 56, { align: 'center', maxWidth: 50 });
+            doc.setFontSize(6); doc.setFont('helvetica', 'normal');
+            doc.text(`DOC: ${j.documento}`, 27, 61, { align: 'center' });
+            doc.text(`CAT: ${j.categoria?.nombre || 'S/C'}`, 27, 65, { align: 'center' });
+            doc.text(`EDAD: ${Utils.calculateAge(j.fecha_nacimiento)} AÑOS`, 27, 69, { align: 'center' });
+
+            doc.setFillColor(241, 245, 249); doc.rect(0, 77, 54, 9, 'F');
+            doc.setTextColor(100, 116, 139); doc.setFontSize(4); doc.text('Documento válido para la temporada actual.', 27, 81, { align: 'center' });
+            
+            doc.save(`Carnet_${j.nombre.replace(/\s+/g, '_')}.pdf`);
+        } catch (e) { Utils.showToast(e.message, 'error'); }
     }
-}
+};
 
-async function registrarPago(pagoId) {
-    if (!await confirmAction('¿Deseas registrar el pago de este mes para el jugador?', 'Sí, pagar', 'btn-success-custom', 'bi-cash-coin', 'var(--success)')) return;
-    try {
-        const data = await fetchAPI(`/pagos/api/${pagoId}`, {
-            method: 'PUT',
-            body: JSON.stringify({ estado: 'pagado', fecha_pago: new Date().toISOString().split('T')[0] }),
-            headers: { 'Content-Type': 'application/json' }
-        });
-        if (data && data.success) {
-            showToast('Pago registrado exitosamente');
-            loadJugadores();
-        }
-    } catch (e) {
-        showToast(e.message || 'Error al registrar pago', 'error');
-    }
-}
-
-async function generarPlantillaEnBlanco() {
-    const { jsPDF } = window.jspdf;
-    const doc       = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-
-    doc.setFillColor(15, 23, 42);
-    doc.rect(0, 0, pageWidth, 40, 'F');
-    doc.setFillColor(16, 185, 129);
-    doc.rect(0, 40, pageWidth, 3, 'F');
-    doc.setTextColor(16, 185, 129);
-    doc.setFontSize(22);
-    doc.setFont('helvetica', 'bold');
-    doc.text('futGistro', 15, 20);
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'normal');
-    doc.text('FORMATO DE INSCRIPCIÓN', 15, 28);
-
-    const escuelaNombre = window.__USER__ && window.__USER__.escuela_nombre ? window.__USER__.escuela_nombre.toUpperCase() : 'ESCUELA DE FÚTBOL';
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text(escuelaNombre, pageWidth - 15, 26, { align: 'right' });
-
-    let y = 55;
-    const margin      = 15;
-    const rightMargin = pageWidth - 15;
-    const totalWidth  = rightMargin - margin;
-
-    const drawSection = (title, yPos) => {
-        doc.setFillColor(15, 23, 42);
-        doc.rect(margin, yPos, totalWidth, 8, 'F');
-        doc.setTextColor(16, 185, 129);
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'bold');
-        doc.text(title.toUpperCase(), margin + 5, yPos + 5.5);
-    };
-
-    const drawField = (label, x, yPos, w) => {
-        doc.setFillColor(241, 245, 249);
-        doc.rect(x, yPos, w, 10, 'F');
-        doc.setDrawColor(203, 213, 225);
-        doc.setLineWidth(0.3);
-        doc.line(x, yPos + 10, x + w, yPos + 10);
-        doc.setTextColor(15, 23, 42);
-        doc.setFontSize(7);
-        doc.setFont('helvetica', 'bold');
-        doc.text(label, x + 2, yPos + 4);
-    };
-
-    drawSection('Datos Personales', y); y += 12;
-    doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(203, 213, 225);
-    doc.setLineDashPattern([1, 1], 0);
-    doc.rect(margin, y, 30, 38);
-    doc.setTextColor(148, 163, 184);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Pegar Foto', margin + 15, y + 20, { align: 'center' });
-    doc.setLineDashPattern([], 0);
-
-    const fieldX = margin + 35;
-    const fieldW = totalWidth - 35;
-    drawField('NOMBRES', fieldX, y, fieldW); y += 14;
-    drawField('APELLIDOS', fieldX, y, fieldW); y += 14;
-    drawField('DOCUMENTO / DNI', fieldX, y, (fieldW / 2) - 2);
-    drawField('FECHA NACIMIENTO', fieldX + (fieldW / 2) + 2, y, (fieldW / 2) - 2); y += 16;
-    drawField('LUGAR DE NACIMIENTO', margin, y, 65);
-    drawField('ESTATURA', margin + 70, y, 30);
-    drawField('PESO', margin + 105, y, 30);
-    drawField('TIPO DE SANGRE / RH', margin + 140, y, 40); y += 14;
-    drawField('EPS / SEGURO MÉDICO', margin, y, 80);
-    drawField('BARRIO', margin + 85, y, 45);
-    drawField('DIRECCIÓN', margin + 135, y, 45); y += 18;
-
-    drawSection('Información Académica y Contacto', y); y += 12;
-    drawField('INSTITUCIÓN EDUCATIVA', margin, y, 110);
-    drawField('GRADO / NIVEL', margin + 115, y, 65); y += 14;
-    drawField('NÚMERO DE TELÉFONO / CELULAR JUGADOR', margin, y, 85);
-    drawField('REDES SOCIALES (INSTAGRAM/FACEBOOK)', margin + 90, y, 90); y += 18;
-
-    drawSection('Información Familiar / Acudiente', y); y += 12;
-    drawField('NOMBRE COMPLETO MADRE O PADRE', margin, y, 110);
-    drawField('OCUPACIÓN / PROFESIÓN', margin + 115, y, 65); y += 14;
-    drawField('CORREO ELECTRÓNICO ACUDIENTE', margin, y, 110);
-    drawField('NÚMERO DE TELÉFONO ACUDIENTE', margin + 115, y, 65); y += 20;
-
-    doc.setFillColor(241, 245, 249);
-    doc.rect(margin, y, totalWidth, 15, 'F');
-    doc.setTextColor(100, 116, 139);
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Reconozco que los datos aquí suministrados son reales y autorizo el tratamiento de datos personales de acuerdo a las ', margin + 5, y + 6);
-    doc.text('leyes vigentes de regulación en escuelas deportivas. Al firmar esta inscripción nos comprometemos con los reglamentos internos.', margin + 5, y + 10);
-    y += 28;
-
-    doc.setDrawColor(15, 23, 42);
-    doc.setLineWidth(0.5);
-    doc.line(margin + 10, y, margin + 70, y);
-    doc.line(margin + 110, y, margin + 170, y);
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Firma Apoderado / Acudiente', margin + 40, y + 5, { align: 'center' });
-    doc.text('Firma Recibido por / Entrenador', margin + 140, y + 5, { align: 'center' });
-
-    const date = new Date();
-    doc.setTextColor(148, 163, 184);
-    doc.setFontSize(7);
-    doc.text(`Generado vía futGistro © ${date.getFullYear()} | Formato de uso interno`, pageWidth / 2, 285, { align: 'center' });
-
-    doc.save('Plantilla_FutGistro.pdf');
-}
+document.addEventListener('DOMContentLoaded', JugadoresListaPage.init);

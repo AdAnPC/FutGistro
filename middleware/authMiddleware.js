@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const AppError = require('../utils/AppError');
 
 // Middleware to verify JWT token from session
 const authMiddleware = (req, res, next) => {
@@ -7,7 +8,7 @@ const authMiddleware = (req, res, next) => {
 
         if (!token) {
             if (req.xhr || req.headers.accept?.includes('application/json')) {
-                return res.status(401).json({ success: false, message: 'Sesión expirada' });
+                throw new AppError('Sesión expirada', 401);
             }
             return res.redirect('/auth/login');
         }
@@ -18,9 +19,11 @@ const authMiddleware = (req, res, next) => {
         res.locals.user = decoded;
         next();
     } catch (error) {
+        if (error instanceof AppError) return next(error);
+        
         req.session.destroy();
         if (req.xhr || req.headers.accept?.includes('application/json')) {
-            return res.status(401).json({ success: false, message: 'Sesión expirada' });
+            return next(new AppError('Sesión expirada', 401));
         }
         return res.redirect('/auth/login');
     }
@@ -31,10 +34,11 @@ const isSuperAdmin = (req, res, next) => {
     if (req.user && req.user.rol === 'superadmin') {
         return next();
     }
-    // Return JSON for API/fetch requests, HTML for page navigation
+    
     if (req.xhr || req.headers.accept?.includes('application/json') || req.path.includes('/api')) {
-        return res.status(403).json({ success: false, message: 'Acceso denegado. Solo el Super Administrador puede realizar esta acción.' });
+        throw new AppError('Acceso denegado. Solo el Super Administrador puede realizar esta acción.', 403);
     }
+    
     return res.status(403).send(`
     <script>
       alert('Acceso denegado. Solo el Super Administrador puede realizar esta acción.');
@@ -48,10 +52,11 @@ const isAdmin = (req, res, next) => {
     if (req.user && (req.user.rol === 'administrador' || req.user.rol === 'superadmin')) {
         return next();
     }
-    // Return JSON for API/fetch requests, HTML for page navigation
+    
     if (req.xhr || req.headers.accept?.includes('application/json') || req.path.includes('/api')) {
-        return res.status(403).json({ success: false, message: 'Acceso denegado. Solo administradores pueden realizar esta acción.' });
+        throw new AppError('Acceso denegado. Solo administradores pueden realizar esta acción.', 403);
     }
+    
     return res.status(403).send(`
     <script>
       alert('Acceso denegado. Solo administradores pueden realizar esta acción.');

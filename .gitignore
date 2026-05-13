@@ -6,3 +6,4 @@ public/uploads/firmas/*
 !public/uploads/fotos/.gitkeep
 !public/uploads/documentos/.gitkeep
 !public/uploads/firmas/.gitkeep
+backups/
