@@ -23,82 +23,94 @@ const jugadorService = {
     },
 
     listPlayers: async (query, user) => {
-        const { search, categoria_id, page = 1, limit = 20 } = query;
-        const escuelaFilter = jugadorService.getEscuelaFilter(user);
-        
-        let jugWhere = [];
-        if (escuelaFilter) jugWhere.push(escuelaFilter);
-        if (search) jugWhere.push(ilike(jugadores.nombre, `%${search}%`));
-        if (categoria_id) jugWhere.push(eq(jugadores.categoria_id, parseInt(categoria_id)));
-
-        // Monthly payment check logic
-        if (!search) {
-            const fechaActual = new Date();
-            const mesActual = fechaActual.getMonth() + 1;
-            const anioActual = fechaActual.getFullYear();
+        try {
+            const { search, categoria_id, page = 1, limit = 20 } = query;
+            const escuelaFilter = jugadorService.getEscuelaFilter(user);
             
-            const jugadoresSinPago = await db.query.jugadores.findMany({
-                where: escuelaFilter ? escuelaFilter : undefined,
-                with: {
-                    escuela: { columns: { precio_mensualidad: true } },
-                    pagos: {
-                        where: and(eq(pagos.mes, mesActual), eq(pagos.anio, anioActual)),
-                        columns: { id: true }
+            let jugWhere = [];
+            if (escuelaFilter) jugWhere.push(escuelaFilter);
+            if (search) jugWhere.push(ilike(jugadores.nombre, `%${search}%`));
+            if (categoria_id) jugWhere.push(eq(jugadores.categoria_id, parseInt(categoria_id)));
+
+            // Monthly payment check logic
+            if (!search) {
+                const fechaActual = new Date();
+                const mesActual = fechaActual.getMonth() + 1;
+                const anioActual = fechaActual.getFullYear();
+                
+                const jugadoresSinPago = await db.query.jugadores.findMany({
+                    where: escuelaFilter ? escuelaFilter : undefined,
+                    with: {
+                        escuela: { columns: { precio_mensualidad: true } },
+                        pagos: {
+                            where: and(eq(pagos.mes, mesActual), eq(pagos.anio, anioActual)),
+                            columns: { id: true }
+                        }
                     }
+                });
+
+                const pagosFaltantes = jugadoresSinPago.filter(j => !j.pagos || j.pagos.length === 0);
+                if (pagosFaltantes.length > 0) {
+                    const nuevosPagos = pagosFaltantes.map(j => {
+                        let monto = '0.00';
+                        if (j.escuela && j.escuela.precio_mensualidad != null) {
+                            monto = parseFloat(j.escuela.precio_mensualidad).toFixed(2);
+                            if (monto === 'NaN') monto = '0.00';
+                        }
+                        return {
+                            jugador_id: j.id,
+                            mes: mesActual,
+                            anio: anioActual,
+                            monto,
+                            estado: 'pendiente'
+                        };
+                    });
+                    await db.insert(pagos).values(nuevosPagos);
                 }
+            }
+
+            const limitVal = parseInt(limit) || 20;
+            const offsetVal = (parseInt(page) - 1) * limitVal;
+
+            const fechaActualListar = new Date();
+            const mesActualListar = fechaActualListar.getMonth() + 1;
+            const anioActualListar = fechaActualListar.getFullYear();
+
+            const countResult = await db.select({ count: count() })
+                .from(jugadores)
+                .where(jugWhere.length > 0 ? and(...jugWhere) : undefined);
+            
+            const total = countResult[0].count;
+
+            const listaJugadores = await db.query.jugadores.findMany({
+                where: jugWhere.length > 0 ? and(...jugWhere) : undefined,
+                with: {
+                    categoria: { columns: { id: true, nombre: true } },
+                    escuela: { columns: { id: true, nombre: true } },
+                    pagos: {
+                        where: and(eq(pagos.mes, mesActualListar), eq(pagos.anio, anioActualListar))
+                    }
+                },
+                orderBy: [asc(jugadores.nombre)],
+                limit: limitVal,
+                offset: offsetVal
             });
 
-            const pagosFaltantes = jugadoresSinPago.filter(j => !j.pagos || j.pagos.length === 0);
-            if (pagosFaltantes.length > 0) {
-                const nuevosPagos = pagosFaltantes.map(j => ({
-                    jugador_id: j.id,
-                    mes: mesActual,
-                    anio: anioActual,
-                    monto: j.escuela && j.escuela.precio_mensualidad ? parseFloat(j.escuela.precio_mensualidad).toFixed(2) : '0.00',
-                    estado: 'pendiente'
-                }));
-                await db.insert(pagos).values(nuevosPagos);
-            }
+            const data = listaJugadores.map(j => ({
+                ...j,
+                edad: jugadorService.getEdad(j.fecha_nacimiento)
+            }));
+
+            return {
+                data,
+                total,
+                paginas: Math.ceil(total / limitVal),
+                pagina_actual: parseInt(page)
+            };
+        } catch (error) {
+            console.error("❌ Error en listPlayers:", error);
+            return { data: [], total: 0, paginas: 1, pagina_actual: 1 };
         }
-
-        const limitVal = parseInt(limit);
-        const offsetVal = (parseInt(page) - 1) * limitVal;
-
-        const fechaActualListar = new Date();
-        const mesActualListar = fechaActualListar.getMonth() + 1;
-        const anioActualListar = fechaActualListar.getFullYear();
-
-        const countResult = await db.select({ count: count() })
-            .from(jugadores)
-            .where(jugWhere.length > 0 ? and(...jugWhere) : undefined);
-        
-        const total = countResult[0].count;
-
-        const listaJugadores = await db.query.jugadores.findMany({
-            where: jugWhere.length > 0 ? and(...jugWhere) : undefined,
-            with: {
-                categoria: { columns: { id: true, nombre: true } },
-                escuela: { columns: { id: true, nombre: true } },
-                pagos: {
-                    where: and(eq(pagos.mes, mesActualListar), eq(pagos.anio, anioActualListar))
-                }
-            },
-            orderBy: [asc(jugadores.nombre)],
-            limit: limitVal,
-            offset: offsetVal
-        });
-
-        const data = listaJugadores.map(j => ({
-            ...j,
-            edad: jugadorService.getEdad(j.fecha_nacimiento)
-        }));
-
-        return {
-            data,
-            total,
-            paginas: Math.ceil(total / limitVal),
-            pagina_actual: parseInt(page)
-        };
     },
 
     getPlayerById: async (id, user) => {
