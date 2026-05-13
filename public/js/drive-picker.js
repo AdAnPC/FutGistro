@@ -6,7 +6,7 @@ const DrivePicker = {
     apiKey: 'AIzaSyBy8qXF16hYhjJ31YMDKQFdT6HWg4S6p50',
     clientId: '227228772178-h89hk5pu4t9j8mvstcga70ftgntajpe1.apps.googleusercontent.com',
     appId: '227228772178',
-    accessToken: null,
+    accessToken: sessionStorage.getItem('gdrive_token'),
     pickerApiLoaded: false,
     gisLoaded: false,
     onFilePickedCallback: null,
@@ -33,6 +33,7 @@ const DrivePicker = {
         if (!this.accessToken) {
             this.authenticate();
         } else {
+            // Verificar si el token sigue siendo válido (opcional, por ahora solo intentar)
             this.createPicker();
         }
     },
@@ -43,13 +44,16 @@ const DrivePicker = {
             scope: 'https://www.googleapis.com/auth/drive.readonly',
             callback: (response) => {
                 if (response.error !== undefined) {
-                    throw (response);
+                    console.error('Error de autenticación Google:', response);
+                    return;
                 }
                 this.accessToken = response.access_token;
+                sessionStorage.setItem('gdrive_token', this.accessToken);
                 this.createPicker();
             },
         });
-        tokenClient.requestAccessToken({ prompt: 'consent' });
+        // Quitar prompt: 'consent' para que no pida login si ya hay una sesión activa en el navegador
+        tokenClient.requestAccessToken();
     },
 
     createPicker() {
