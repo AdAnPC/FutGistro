@@ -2,8 +2,6 @@ const { db } = require('../db');
 const { jugadores, categorias, asistencias, escuelas, pagos } = require('../db/schema.js');
 const { eq, and, ilike, count, asc } = require('drizzle-orm');
 const fileService = require('./fileService');
-const driveService = require('./driveService');
-const { processDriveUrl } = require('../utils/drive');
 
 const jugadorService = {
     getEdad: (fechaNacimiento) => {
@@ -144,20 +142,28 @@ const jugadorService = {
         const urlFields = ['foto', 'registro_civil', 'documento_acudiente', 'documento_extra1', 'documento_extra2', 'documento_extra3', 'documento_extra4'];
         urlFields.forEach(field => {
             if (data[`${field}_url`]) {
-                jugadorData[field] = processDriveUrl(data[`${field}_url`]);
+                jugadorData[field] = data[`${field}_url`];
                 delete jugadorData[`${field}_url`];
             }
         });
 
+        const getRelativePath = (file) => {
+            let rel = '/uploads/';
+            if (file.fieldname === 'foto') rel += 'fotos/';
+            else if (['registro_civil', 'documento_acudiente', 'documento_extra1', 'documento_extra2', 'documento_extra3', 'documento_extra4'].includes(file.fieldname)) rel += 'documentos/';
+            rel += file.filename;
+            return rel;
+        };
+
         // Handle direct file uploads
         if (files) {
             if (files.foto) {
-                jugadorData.foto = await driveService.uploadFile(files.foto[0].path, files.foto[0].filename, files.foto[0].mimetype);
+                jugadorData.foto = getRelativePath(files.foto[0]);
             }
             const docs = ['registro_civil', 'documento_acudiente', 'documento_extra1', 'documento_extra2', 'documento_extra3', 'documento_extra4'];
             for (const doc of docs) {
                 if (files[doc]) {
-                    jugadorData[doc] = await driveService.uploadFile(files[doc][0].path, files[doc][0].filename, files[doc][0].mimetype);
+                    jugadorData[doc] = getRelativePath(files[doc][0]);
                 }
             }
         }
@@ -244,21 +250,29 @@ const jugadorService = {
             const urlKey = `${field}_url`;
             if (data[urlKey] && data[urlKey] !== jugador[field]) {
                 fileService.deleteFile(jugador[field]);
-                jugadorData[field] = processDriveUrl(data[urlKey]);
+                jugadorData[field] = data[urlKey];
                 delete jugadorData[urlKey];
             }
         });
 
+        const getRelativePath = (file) => {
+            let rel = '/uploads/';
+            if (file.fieldname === 'foto') rel += 'fotos/';
+            else if (['registro_civil', 'documento_acudiente', 'documento_extra1', 'documento_extra2', 'documento_extra3', 'documento_extra4'].includes(file.fieldname)) rel += 'documentos/';
+            rel += file.filename;
+            return rel;
+        };
+
         if (files) {
             if (files.foto) { 
                 fileService.deleteFile(jugador.foto); 
-                jugadorData.foto = await driveService.uploadFile(files.foto[0].path, files.foto[0].filename, files.foto[0].mimetype);
+                jugadorData.foto = getRelativePath(files.foto[0]);
             }
             const docs = ['registro_civil', 'documento_acudiente', 'documento_extra1', 'documento_extra2', 'documento_extra3', 'documento_extra4'];
             for (const doc of docs) {
                 if (files[doc]) {
                     fileService.deleteFile(jugador[doc]);
-                    jugadorData[doc] = await driveService.uploadFile(files[doc][0].path, files[doc][0].filename, files[doc][0].mimetype);
+                    jugadorData[doc] = getRelativePath(files[doc][0]);
                 }
             }
         }

@@ -1,5 +1,4 @@
 const jugadorService = require('../services/jugadorService');
-const driveService = require('../services/driveService');
 const catchAsync = require('../utils/catchAsync');
 const response = require('../utils/response');
 const AppError = require('../utils/AppError');
@@ -58,10 +57,14 @@ const jugadorController = {
         }
         const file = req.files[0];
         
-        // Subir a Google Drive
-        const driveUrl = await driveService.uploadFile(file.path, file.filename, file.mimetype);
+        // Calcular URL local
+        let relativePath = '/uploads/';
+        if (file.fieldname === 'foto') relativePath += 'fotos/';
+        else if (file.fieldname === 'logo') relativePath += 'logos/';
+        else relativePath += 'documentos/';
+        relativePath += file.filename;
         
-        res.status(200).json({ success: true, url: driveUrl, fieldname: file.fieldname });
+        res.status(200).json({ success: true, url: relativePath, fieldname: file.fieldname });
     }),
 
     // POST /api/jugadores
