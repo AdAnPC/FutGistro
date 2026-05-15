@@ -7,4 +7,3 @@ public/uploads/firmas/*
 !public/uploads/documentos/.gitkeep
 !public/uploads/firmas/.gitkeep
 backups/
-config/google-service-account.json
